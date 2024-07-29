@@ -1,4 +1,6 @@
 package com.example;
+
+
 import javax.swing.*;
 import javax.swing.border.EmptyBorder;
 import java.awt.*;
@@ -20,6 +22,8 @@ public class JiraTool {
     private static String password;
     private static JFrame loginFrame;
     private static JFrame mainFrame;
+    private static JTextArea logArea;
+    private static JProgressBar progressBar;
 
     public static void main(String[] args) {
         SwingUtilities.invokeLater(JiraTool::createLoginWindow);
@@ -75,7 +79,7 @@ public class JiraTool {
     private static void createMainWindow() {
         mainFrame = new JFrame("Jira Tool");
         mainFrame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        mainFrame.setSize(500, 400);
+        mainFrame.setSize(600, 500);
         mainFrame.setLayout(new BorderLayout());
 
         JPanel panel = new JPanel(new GridBagLayout());
@@ -88,6 +92,10 @@ public class JiraTool {
         JTextField ticketField = new JTextField();
         JTextField commentField = new JTextField();
         JComboBox<String> statusBox = new JComboBox<>(STATUS_OPTIONS);
+        logArea = new JTextArea(10, 40);
+        logArea.setEditable(false);
+        JScrollPane logScrollPane = new JScrollPane(logArea);
+        progressBar = new JProgressBar();
 
         c.gridx = 0;
         c.gridy = 0;
@@ -122,6 +130,16 @@ public class JiraTool {
         c.gridx = 0;
         panel.add(backButton, c);
 
+        c.gridx = 0;
+        c.gridy = 4;
+        c.gridwidth = 2;
+        panel.add(progressBar, c);
+
+        c.gridx = 0;
+        c.gridy = 5;
+        c.gridwidth = 2;
+        panel.add(logScrollPane, c);
+
         mainFrame.add(panel, BorderLayout.CENTER);
         mainFrame.setVisible(true);
 
@@ -132,9 +150,9 @@ public class JiraTool {
 
         submitButton.addActionListener(e -> {
             String ticketInput = ticketField.getText();
-            String jiraComment = commentField.getText();
-            if (jiraComment.isEmpty()) {
-                jiraComment = DEFAULT_COMMENT;
+            final String[] jiraComment = {commentField.getText()};
+            if (jiraComment[0].isEmpty()) {
+                jiraComment[0] = DEFAULT_COMMENT;
             }
             String desiredStatus = (String) statusBox.getSelectedItem();
 
@@ -144,13 +162,20 @@ public class JiraTool {
                 return;
             }
 
-            try {
-                transitionJiraTicket(ticketNumber, desiredStatus);
-                addCommentToIssue(ticketNumber, jiraComment);
-                JOptionPane.showMessageDialog(mainFrame, "Transition to " + desiredStatus + " and comment added for ticket " + ticketNumber);
-            } catch (IOException ex) {
-                JOptionPane.showMessageDialog(mainFrame, "Error processing request: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
-            }
+            new Thread(() -> {
+                try {
+                    progressBar.setIndeterminate(true);
+                    transitionJiraTicket(ticketNumber, desiredStatus);
+                    addCommentToIssue(ticketNumber, jiraComment[0]);
+                    log("Transition to " + desiredStatus + " and comment added for ticket " + ticketNumber);
+                    JOptionPane.showMessageDialog(mainFrame, "Transition to " + desiredStatus + " and comment added for ticket " + ticketNumber);
+                } catch (IOException ex) {
+                    log("Error processing request: " + ex.getMessage());
+                    JOptionPane.showMessageDialog(mainFrame, "Error processing request: " + ex.getMessage(), "Error", JOptionPane.ERROR_MESSAGE);
+                } finally {
+                    progressBar.setIndeterminate(false);
+                }
+            }).start();
         });
     }
 
@@ -192,12 +217,14 @@ public class JiraTool {
             String transitionId = transitionIds[i];
             String apiUrl = JIRA_URL + "/rest/api/2/issue/" + ticketNumber + "/transitions";
             sendCurlRequest(apiUrl, "{\"transition\": {\"id\": \"" + transitionId + "\"}}");
+            log("Performed transition with ID: " + transitionId);
         }
     }
 
     private static void addCommentToIssue(String ticketNumber, String comment) throws IOException {
         String apiUrl = JIRA_URL + "/rest/api/2/issue/" + ticketNumber + "/comment";
         sendCurlRequest(apiUrl, "{\"body\": \"" + comment + "\"}");
+        log("Added comment to ticket: " + ticketNumber);
     }
 
     private static void sendCurlRequest(String apiUrl, String jsonInputString) throws IOException {
@@ -214,8 +241,12 @@ public class JiraTool {
         try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
             String line;
             while ((line = reader.readLine()) != null) {
-                System.out.println(line);
+                log(line);
             }
         }
+    }
+
+    private static void log(String message) {
+        SwingUtilities.invokeLater(() -> logArea.append(message + "\n"));
     }
 }
