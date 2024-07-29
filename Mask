@@ -1,0 +1,126 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: Prompt for Jira username
+set /p username="Enter Jira Username: "
+echo Username entered: %username%
+
+:: Masked password input
+call :HInput
+
+echo(
+echo Password captured: %Line%
+
+set "password=%Line%"
+set "jiraUrl=https://track.td.com"
+set "defaultComment=The file is uploaded"
+set "defaultStatus=2"  :: Default to Done if no status is entered
+
+:main
+:loop
+:: Reset variables
+set "ticketNumber="
+set "ticketInput="
+set "statusSelection="
+
+:: Prompt for Jira ticket number or URL, comment, and status
+set /p ticketInput="Enter Jira Ticket Number or URL (or type 'exit' to quit): "
+if /i "!ticketInput!"=="exit" goto :end
+
+:: Extract the ticket number if a URL is provided
+for /f "tokens=2 delims=/browse/" %%i in ("!ticketInput!") do set "ticketNumber=%%i"
+if not defined ticketNumber set "ticketNumber=!ticketInput!"
+
+set /p jiraComment="Enter Jira Comment: "
+if "!jiraComment!"=="" set "jiraComment=%defaultComment%"
+
+:: Prompt for desired status
+echo Select the desired status:
+echo 1. In Progress
+echo 2. Done
+echo 3. Reopen
+set /p statusSelection="Enter the number corresponding to the desired status (default is Done): "
+
+if "!statusSelection!"=="" set "statusSelection=%defaultStatus%"
+
+if "!statusSelection!"=="1" (
+    set "desiredStatus=In Progress"
+) else if "!statusSelection!"=="2" (
+    set "desiredStatus=Done"
+) else if "!statusSelection!"=="3" (
+    set "desiredStatus=Reopen"
+) else (
+    echo Invalid selection.
+    goto loop
+)
+
+:: Determine the appropriate transition IDs based on ticket number pattern
+set "openTransitionId="
+set "refiningTransitionId="
+set "waitingOnDependencyTransitionId="
+set "readyToStartTransitionId="
+set "inProgressTransitionId="
+set "closeTransitionId="
+
+if /i "!ticketNumber:~0,3!"=="CEM" (
+    set "openTransitionId=11"
+    set "closeTransitionId=51"
+    echo "Its CEM"
+) else if /i "!ticketNumber:~0,7!"=="CRPHUCC" (
+    set "openTransitionId=1081"
+    set "refiningTransitionId=701"
+    set "waitingOnDependencyTransitionId=681"
+    set "readyToStartTransitionId=691"
+    set "inProgressTransitionId=711"
+    set "closeTransitionId=411"
+    echo "Its UCC or Corecarl"
+) else (
+    set "openTransitionId=1081"
+    set "refiningTransitionId=701"
+    set "waitingOnDependencyTransitionId=681"
+    set "readyToStartTransitionId=691"
+    set "inProgressTransitionId=711"
+    set "closeTransitionId=411"
+    echo "Check your ticket number, maybe it's not supported here. Using generic IDs."
+)
+
+:: Function to transition the Jira ticket
+call :transition_jira_ticket
+
+:: Add comment to the issue
+curl -u %username%:%password% -X POST -H "Content-Type: application/json" -d "{\"body\": \"%jiraComment%\"}" %jiraUrl%/rest/api/2/issue/%ticketNumber%/comment
+
+echo Transition to %desiredStatus% and comment added for ticket %ticketNumber%.
+goto loop
+
+:end
+pause
+exit /b
+
+:HInput
+:: Version 3.0
+SetLocal DisableDelayedExpansion
+Echo Enter your password below:
+Set "Line="
+Rem Save 0x08 character in BS variable
+For /F %%# In ('"Prompt;$H&For %%# in (1) Do Rem"') Do Set "BS=%%#"
+
+:HILoop
+Set "Key="
+For /F "delims=" %%# In ('Xcopy /W "%~f0" "%~f0" 2^>Nul') Do If Not Defined Key Set "Key=%%#"
+Set "Key=%Key:~-1%"
+SetLocal EnableDelayedExpansion
+If Not Defined Key Goto :HIEnd 
+If %BS%==^%Key% (Set /P "=%BS% %BS%" <Nul
+Set "Key="
+If Defined Line Set "Line=!Line:~0,-1!"
+) Else Set /P "=*" <Nul
+If Not Defined Line (EndLocal &Set "Line=%Key%"
+) Else For /F delims^=^ eol^= %%# In (
+"!Line!") Do EndLocal &Set "Line=%%#%Key%"
+Goto :HILoop
+
+:HIEnd
+Echo(
+Echo Your password is '!Line!'
+Goto :Eof
