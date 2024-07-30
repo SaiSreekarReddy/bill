@@ -22,8 +22,10 @@ set "defaultStatus=2"  :: Default to Done if no status is entered
 set "ticketNumber="
 set "ticketInput="
 set "statusSelection="
+set "skipComment="
 
-:: Prompt for Jira ticket number or URL, comment, and status
+:: Prompt for Jira ticket number or URL, keep prompting until valid input is provided
+:ticketPrompt
 set /p ticketInput="Enter Jira Ticket Number or URL (or type 'exit' to quit): "
 if /i "!ticketInput!"=="exit" goto :end
 
@@ -31,12 +33,22 @@ if /i "!ticketInput!"=="exit" goto :end
 for /f "tokens=2 delims=/browse/" %%i in ("!ticketInput!") do set "ticketNumber=%%i"
 if not defined ticketNumber set "ticketNumber=!ticketInput!"
 
+if "!ticketNumber!"=="" (
+    echo Ticket number cannot be empty.
+    goto ticketPrompt
+)
+
 set /p jiraComment="Enter Jira Comment (type 'def' for default, leave blank to skip): "
 
 :: Check for default comment
-if /i "!jiraComment!"=="def" set "jiraComment=%defaultComment%"
-if "!jiraComment!"=="" set "skipComment=true" else set "skipComment=false"
-
+if /i "!jiraComment!"=="def" (
+    set "jiraComment=%defaultComment%"
+) else if "!jiraComment!"=="" (
+    set "skipComment=true"
+) else (
+    set "skipComment=false"
+)
+echo !jiraComment!
 :: Prompt for desired status
 echo Select the desired status:
 echo 1. In Progress
@@ -87,15 +99,30 @@ if /i "!ticketNumber:~0,3!"=="CEM" (
     echo "Check your ticket number, maybe it's not supported here. Using generic IDs."
 )
 
+:: Get current status of the ticket
+curl -u %username%:%password% -X GET -H "Content-Type: application/json" %jiraUrl%/rest/api/2/issue/%ticketNumber%?fields=status > ticketStatus.json
+
+for /f "tokens=3 delims=:, " %%i in ('findstr /C:"\"id\"" ticketStatus.json') do set "currentStatusId=%%i"
+del ticketStatus.json
+
+:: If the ticket is closed (status ID is 51 or 411), reopen it first
+if "!currentStatusId!"=="51" (
+    echo Ticket is closed. Reopening it first.
+    curl -u %username%:%password% -X POST -H "Content-Type: application/json" -d "{\"transition\": {\"id\": \"%openTransitionId%\"}}" %jiraUrl%/rest/api/2/issue/%ticketNumber%/transitions
+) else if "!currentStatusId!"=="411" (
+    echo Ticket is closed. Reopening it first.
+    curl -u %username%:%password% -X POST -H "Content-Type: application/json" -d "{\"transition\": {\"id\": \"%openTransitionId%\"}}" %jiraUrl%/rest/api/2/issue/%ticketNumber%/transitions
+)
+
 :: Function to transition the Jira ticket
 call :transition_jira_ticket
 
 :: Add comment to the issue if not skipped
-if "!skipComment!"=="false" (
+if "!skipComment!"=="true" (
+    echo No comment added for ticket %ticketNumber%.
+) else (
     curl -u %username%:%password% -X POST -H "Content-Type: application/json" -d "{\"body\": \"%jiraComment%\"}" %jiraUrl%/rest/api/2/issue/%ticketNumber%/comment
     echo Comment added for ticket %ticketNumber%.
-) else (
-    echo No comment added for ticket %ticketNumber%.
 )
 
 echo Transition to %desiredStatus% completed for ticket %ticketNumber%.
