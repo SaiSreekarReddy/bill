@@ -1,33 +1,32 @@
-@echo off
-REM Set the path to PuTTY's plink.exe
-set PUTTY_PATH=C:\path\to\putty\plink.exe
-
-REM Prompt for the server's IP address
-set /p SERVER_IP=Enter the server IP address: 
+rem @echo off
+REM Prompt for the server's IP address or hostname
+set /p SERVER_ADDR=Enter the server IP address or hostname: 
 
 REM Set your server's login details
 set USERNAME=your_username
 set PASSWORD=your_password
 
-REM Commands to execute on the server
-set CMD1=echo %PASSWORD% | sudo -S su
+REM Define the command to check the server type
 set CMD2=if [ -d "/opt/jboss" ]; then echo jboss; elif [ -d "/opt/springboot" ]; then echo springboot; else echo regular; fi
 
-REM Command to execute based on the server type
-set JBOSS_CMD=cd /opt/jboss
-set SPRINGBOOT_CMD=cd /opt/springboot
-set REGULAR_CMD=cd /opt/regular
+REM Use SSH to execute the command and capture the server type in a variable
+for /f "delims=" %%i in ('ssh %USERNAME%@%SERVER_ADDR% "echo %PASSWORD% | sudo -S bash -c '%CMD2%'"') do set SERVERTYPE=%%i
 
-REM Execute the initial commands and get the server type
-for /f "delims=" %%i in ('%PUTTY_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% "echo %PASSWORD% | sudo -S bash -c '%CMD2%'"') do set SERVERTYPE=%%i
+REM Display the server type (optional, for debugging purposes)
+echo Server type is: %SERVERTYPE%
+
+REM Define the commands to navigate to the appropriate directory based on the server type
+set JBOSS_CMD=cd /opt/jboss && exec bash
+set SPRINGBOOT_CMD=cd /opt/springboot && exec bash
+set REGULAR_CMD=cd /opt/regular && exec bash
 
 REM Execute commands based on the server type and keep the session open
 if "%SERVERTYPE%"=="jboss" (
-    %PUTTY_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% "echo %PASSWORD% | sudo -S bash -c '%JBOSS_CMD && exec bash'"
+    ssh %USERNAME%@%SERVER_ADDR% -t "echo %PASSWORD% | sudo -S bash -c '%JBOSS_CMD'"
 ) else if "%SERVERTYPE%"=="springboot" (
-    %PUTTY_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% "echo %PASSWORD% | sudo -S bash -c '%SPRINGBOOT_CMD && exec bash'"
+    ssh %USERNAME%@%SERVER_ADDR% -t "echo %PASSWORD% | sudo -S bash -c '%SPRINGBOOT_CMD'"
 ) else (
-    %PUTTY_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% "echo %PASSWORD% | sudo -S bash -c '%REGULAR_CMD && exec bash'"
+    ssh %USERNAME%@%SERVER_ADDR% -t "echo %PASSWORD% | sudo -S bash -c '%REGULAR_CMD'"
 )
 
 echo Script execution completed.
