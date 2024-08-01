@@ -18,11 +18,17 @@ if "%special%"=="exit" goto :end
 
 echo Creating subtask with special word: %special%
 
-:: Create the JSON data for the subtask
-set json_data={"fields":{"project":{"key":"%ticket:~0,3%"},"parent":{"key":"%ticket%"},"summary":"please help use the %special% in %testset% to %this_month%","issuetype":{"name":"Sub-task"}}}
+:: Construct the JSON payload and handle quotes properly
+set json_data={"fields":{"project":{"key":"%ticket:~0,3%"},"parent":{"key":"%ticket%"},"summary":"please Upgrade the %special% in %testset% to %this_month%","issuetype":{"name":"Sub-task"}}}
+
+:: Save the JSON to a temporary file to avoid issues with special characters
+echo %json_data% > json_payload.txt
 
 :: Use curl to create the subtask
-curl -D- -u %username%:%password% -X POST --data "%json_data%" -H "Content-Type: application/json" %jira_base_url%/rest/api/2/issue/
+curl -D- -u %username%:%password% -X POST -d @json_payload.txt -H "Content-Type: application/json" %jira_base_url%/rest/api/2/issue/
+
+:: Cleanup
+del json_payload.txt
 
 :: Loop back to the beginning to ask for another special word
 goto :main
