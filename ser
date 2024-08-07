@@ -3,6 +3,96 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Index - Enter Source IP</title>
+    <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Roboto', sans-serif;
+            background-color: #f4f4f4;
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            height: 100vh;
+            color: #333;
+        }
+        .container {
+            background-color: white;
+            padding: 20px;
+            border-radius: 5px;
+            box-shadow: 0 0 10px rgba(0,0,0,0.1);
+            max-width: 400px;
+            width: 100%;
+            box-sizing: border-box;
+        }
+        h2 {
+            margin-top: 0;
+            font-weight: 500;
+            text-align: center;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            box-sizing: border-box;
+        }
+        button {
+            width: 100%;
+            background-color: #28a745;
+            color: white;
+            border: none;
+            padding: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        button:hover {
+            background-color: #218838;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h2>Enter Source IP</h2>
+        <form onsubmit="saveSourceIP()">
+            <div class="form-group">
+                <label for="sourceIP">Source IP Address:</label>
+                <input type="text" id="sourceIP" name="sourceIP" placeholder="Enter IP address" required>
+            </div>
+            <button type="submit">Proceed</button>
+        </form>
+    </div>
+
+    <script>
+        function saveSourceIP() {
+            const sourceIP = document.getElementById('sourceIP').value;
+            sessionStorage.setItem('sourceIP', sourceIP);
+            // Navigate to the transfer page after saving the IP
+            window.location.href = 'transfer.html';
+        }
+    </script>
+</body>
+</html>
+
+
+--
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>File Transfer - File Transfer Tool</title>
     <link href="https://fonts.googleapis.com/css2?family=Roboto:wght@400;500;700&display=swap" rel="stylesheet">
     <style>
@@ -300,7 +390,7 @@
                     <label for="filterDate">Filter Date:</label>
                     <input type="date" id="filterDate" required>
                 </div>
-                <button onclick="transferFiles()">Transfer Files</button>
+                <button id="transferButton">Transfer Files</button>
             </div>
 
             <!-- History Section -->
@@ -358,140 +448,104 @@
     <script>
         let filesToUpload = [];
 
-        function showSection(sectionId) {
-            document.getElementById('transferSection').classList.add('hidden');
-            document.getElementById('historySection').classList.add('hidden');
-            document.getElementById('uploadSection').classList.add('hidden');
+        document.addEventListener('DOMContentLoaded', function() {
+            const sourceIP = sessionStorage.getItem('sourceIP') || '192.168.0.1'; // Default to 192.168.0.1 if not set
+            console.log('Source IP:', sourceIP); // For debugging
 
-            document.getElementById(sectionId).classList.remove('hidden');
+            // Use the sourceIP in the transferFiles function
+            function transferFiles() {
+                const sourcePath = document.getElementById('sourcePath').value;
+                const destServer = document.getElementById('destServer').value;
+                const destPath = document.getElementById('destPath').value;
+                const filterDate = document.getElementById('filterDate').value;
 
-            const pageTitle = {
-                transferSection: 'Transfer Files',
-                historySection: 'Transfer History',
-                uploadSection: 'Upload Files'
-            };
+                const fileName = sourcePath.split('/').pop();
+                const destIP = destServer;
 
-            document.getElementById('pageTitle').innerText = pageTitle[sectionId];
-        }
+                // Log the information or use it as needed
+                console.log('Transferring file from IP:', sourceIP, 'to IP:', destIP);
 
-        function refreshPage() {
-            location.reload();
-        }
-
-        function transferFiles() {
-            const sourcePath = document.getElementById('sourcePath').value;
-            const destServer = document.getElementById('destServer').value;
-            const destPath = document.getElementById('destPath').value;
-            const filterDate = document.getElementById('filterDate').value;
-
-            const fileName = sourcePath.split('/').pop();
-            const sourceIP = '192.168.0.1'; // Example source IP
-            const destIP = destServer;
-            const dateTime = new Date().toLocaleString();
-
-            fetch('/api/transfer', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sourcePath: sourcePath,
-                    destServer: destServer,
-                    destPath: destPath,
-                    filterDate: filterDate
+                // Proceed with your file transfer logic
+                fetch('/api/transfer', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        sourcePath: sourcePath,
+                        destServer: destServer,
+                        destPath: destPath,
+                        filterDate: filterDate,
+                        sourceIP: sourceIP, // Use the stored IP here
+                        destIP: destIP
+                    })
                 })
-            })
-            .then(response => response.text())
-            .then(message => {
-                alert(message);
-                // Add the transfer details to the history
-                addToHistory(fileName, sourceIP, destIP, dateTime);
-            })
-            .catch(error => {
-                console.error('Error during file transfer:', error);
-                alert('An error occurred during file transfer. Please try again.');
-            });
+                .then(response => response.text())
+                .then(message => {
+                    alert(message);
+                    // Additional logic for updating the history, etc.
+                })
+                .catch(error => {
+                    console.error('Error during file transfer:', error);
+                    alert('An error occurred during file transfer. Please try again.');
+                });
+            }
+
+            // Attach the transferFiles function to the button or form
+            document.getElementById('transferButton').addEventListener('click', transferFiles);
+        });
+
+        function displaySelectedFiles() {
+            const fileInput = document.getElementById('fileInput');
+            const fileList = document.getElementById('fileList');
+            fileList.innerHTML = ''; // Clear the current list
+
+            for (const file of fileInput.files) {
+                filesToUpload.push(file);
+
+                // Create a new div for each file
+                const fileItem = document.createElement('div');
+                fileItem.style.display = 'flex';
+                fileItem.style.justifyContent = 'space-between';
+                fileItem.style.alignItems = 'center';
+                fileItem.style.padding = '5px 0';
+
+                // Create a span to hold the file name
+                const fileName = document.createElement('span');
+                fileName.textContent = file.name;
+
+                // Create a remove button
+                const removeButton = document.createElement('button');
+                removeButton.textContent = 'Remove';
+                removeButton.style.backgroundColor = '#dc3545';
+                removeButton.style.color = 'white';
+                removeButton.style.border = 'none';
+                removeButton.style.padding = '5px 10px';
+                removeButton.style.borderRadius = '3px';
+                removeButton.style.cursor = 'pointer';
+                removeButton.onclick = function() {
+                    removeFile(file.name);
+                };
+
+                // Append file name and remove button to the file item
+                fileItem.appendChild(fileName);
+                fileItem.appendChild(removeButton);
+
+                // Append the file item to the file list
+                fileList.appendChild(fileItem);
+            }
+
+            // Clear the file input to allow selecting the same file(s) again if needed
+            fileInput.value = '';
         }
 
-        function addToHistory(fileName, sourceIP, destIP, dateTime) {
-            const historyTable = document.getElementById('historyTable').querySelector('tbody');
-            const historyRow = document.createElement('tr');
+        function removeFile(fileName) {
+            // Remove the file from the filesToUpload array
+            filesToUpload = filesToUpload.filter(file => file.name !== fileName);
 
-            historyRow.innerHTML = `
-                <td>${fileName}</td>
-                <td>${sourceIP}</td>
-                <td>${destIP}</td>
-                <td>${dateTime}</td>
-            `;
-
-            historyTable.appendChild(historyRow);
+            // Refresh the display
+            displaySelectedFiles();
         }
-
-        
-
-       
-
-function displaySelectedFiles() {
-    const fileInput = document.getElementById('fileInput');
-    const fileList = document.getElementById('fileList');
-
-    // Add newly selected files to the filesToUpload array
-    for (const file of fileInput.files) {
-        // Check if the file is already in the array to avoid duplicates
-        if (!filesToUpload.some(f => f.name === file.name && f.size === file.size)) {
-            filesToUpload.push(file);
-        }
-    }
-
-    // Clear the current list
-    fileList.innerHTML = '';
-
-    // Display all files in the filesToUpload array
-    filesToUpload.forEach(file => {
-        // Create a new div for each file
-        const fileItem = document.createElement('div');
-        fileItem.style.display = 'flex';
-        fileItem.style.justifyContent = 'space-between';
-        fileItem.style.alignItems = 'center';
-        fileItem.style.padding = '5px 0';
-
-        // Create a span to hold the file name
-        const fileName = document.createElement('span');
-        fileName.textContent = file.name;
-
-        // Create a remove button
-        const removeButton = document.createElement('button');
-        removeButton.textContent = 'Remove';
-        removeButton.style.backgroundColor = '#dc3545';
-        removeButton.style.color = 'white';
-        removeButton.style.border = 'none';
-        removeButton.style.padding = '5px 10px';
-        removeButton.style.borderRadius = '3px';
-        removeButton.style.cursor = 'pointer';
-        removeButton.onclick = function() {
-            removeFile(file.name);
-        };
-
-        // Append file name and remove button to the file item
-        fileItem.appendChild(fileName);
-        fileItem.appendChild(removeButton);
-
-        // Append the file item to the file list
-        fileList.appendChild(fileItem);
-    });
-
-    // Clear the file input to allow selecting the same file(s) again if needed
-    fileInput.value = '';
-}
-
-function removeFile(fileName) {
-    // Remove the file from the filesToUpload array
-    filesToUpload = filesToUpload.filter(file => file.name !== fileName);
-
-    // Refresh the display
-    displaySelectedFiles();
-}
-
 
         function openUploadModal() {
             if (filesToUpload.length === 0) {
