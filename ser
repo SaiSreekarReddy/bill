@@ -1,270 +1,3 @@
-package com.example.demo;
-
-import org.springframework.boot.SpringApplication;
-import org.springframework.boot.autoconfigure.SpringBootApplication;
-
-@SpringBootApplication
-public class DemoApplication {
-
-    public static void main(String[] args) {
-        SpringApplication.run(DemoApplication.class, args);
-    }
-
-}
---
-
-
-package com.example.demo;
-
-public class LoginRequest {
-    private String username;
-    private String password;
-    private String serverIp;
-
-    // Getters and Setters
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getServerIp() {
-        return serverIp;
-    }
-
-    public void setServerIp(String serverIp) {
-        this.serverIp = serverIp;
-    }
-}
---
-
-<project xmlns="http://maven.apache.org/POM/4.0.0"
-         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
-    <modelVersion>4.0.0</modelVersion>
-
-    <groupId>com.example</groupId>
-    <artifactId>demo</artifactId>
-    <version>0.0.1-SNAPSHOT</version>
-    <packaging>jar</packaging>
-
-    <name>demo</name>
-    <description>Demo project for Spring Boot</description>
-
-    <parent>
-        <groupId>org.springframework.boot</groupId>
-        <artifactId>spring-boot-starter-parent</artifactId>
-        <version>2.7.5</version> <!-- Use the latest stable version compatible with your Java version -->
-        <relativePath/> <!-- lookup parent from repository -->
-    </parent>
-
-    <properties>
-        <java.version>11</java.version> <!-- Ensure this matches your installed Java version -->
-    </properties>
-
-    <dependencies>
-        <!-- Spring Boot Web Starter for building web, including RESTful, applications using Spring MVC -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-web</artifactId>
-        </dependency>
-
-        <!-- Spring Boot Starter for Testing -->
-        <dependency>
-            <groupId>org.springframework.boot</groupId>
-            <artifactId>spring-boot-starter-test</artifactId>
-            <scope>test</scope>
-        </dependency>
-
-        <!-- JUnit 5 (Jupiter) -->
-        <dependency>
-            <groupId>org.junit.jupiter</groupId>
-            <artifactId>junit-jupiter</artifactId>
-            <version>5.8.2</version> <!-- Use the latest stable version -->
-            <scope>test</scope>
-        </dependency>
-    </dependencies>
-
-    <build>
-        <plugins>
-            <!-- Spring Boot Maven Plugin -->
-            <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
-            </plugin>
-        </plugins>
-    </build>
-
-    <repositories>
-        <repository>
-            <id>central</id>
-            <url>https://repo.maven.apache.org/maven2</url>
-        </repository>
-    </repositories>
-</project>
---
-
-<!DOCTYPE html>
-<html lang="en">
-<head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>File Transfer Tool</title>
-    <style>
-        body {
-            font-family: Arial, sans-serif;
-            background-color: #3e3d3e;
-            margin: 0;
-            padding: 0;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-        }
-        .container {
-            width: 350px;
-            border-radius: 10px;
-            box-shadow: 0 0 15px rgba(0, 0, 0, 0.2);
-            overflow: hidden;
-        }
-        .top-section {
-            background-color: #28a745;
-            color: #fff;
-            text-align: center;
-            padding: 30px 20px;
-            position: relative;
-        }
-        .top-section img {
-            width: 60px;
-            height: 60px;
-            margin-bottom: 10px;
-        }
-        .top-section h2 {
-            margin: 0;
-            font-size: 24px;
-        }
-        .bottom-section {
-            background-color: #fff;
-            padding: 20px;
-        }
-        .bottom-section input[type="text"], 
-        .bottom-section input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #ccc;
-            border-radius: 5px;
-            box-sizing: border-box;
-        }
-        .bottom-section button {
-            width: 100%;
-            padding: 10px;
-            background-color: #28a745;
-            border: none;
-            border-radius: 5px;
-            color: #fff;
-            font-size: 16px;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-        .bottom-section button:hover {
-            background-color: #218838;
-        }
-    </style>
-</head>
-<body>
-    <div class="container">
-        <div class="top-section">
-            <!-- Add your logo here -->
-            <img src="images\test.png" alt="Logo">
-            <h2>Sign In</h2>
-        </div>
-        <div class="bottom-section">
-            <div id="loginSection">
-                <input type="text" id="username" placeholder="Username">
-                <input type="password" id="password" placeholder="Password">
-                <input type="text" id="serverIp" placeholder="Server IP">
-                <button onclick="login()">Login</button>
-            </div>
-            <div id="transferSection" style="display:none;">
-                <input type="text" id="sourcePath" placeholder="Source Path">
-                <input type="text" id="destServer" placeholder="Destination Server">
-                <input type="text" id="destPath" placeholder="Destination Path">
-                <input type="date" id="filterDate">
-                <button onclick="transferFiles()">Transfer Files</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        function login() {
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const serverIp = document.getElementById('serverIp').value;
-
-            fetch('/api/login', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({ username, password, serverIp })
-            })
-            .then(response => {
-                if (response.ok) {
-                    document.getElementById('loginSection').style.display = 'none';
-                    document.getElementById('transferSection').style.display = 'block';
-                } else {
-                    alert('Login failed. Please check your credentials and try again.');
-                }
-            })
-            .catch(error => {
-                console.error('Error during login:', error);
-                alert('An error occurred during login. Please try again.');
-            });
-        }
-
-        function transferFiles() {
-            const sourcePath = document.getElementById('sourcePath').value;
-            const destServer = document.getElementById('destServer').value;
-            const destPath = document.getElementById('destPath').value;
-            const filterDate = document.getElementById('filterDate').value;
-
-            fetch('/api/transfer', {
-                method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json'
-                },
-                body: JSON.stringify({
-                    sourcePath: sourcePath,
-                    destServer: destServer,
-                    destPath: destPath,
-                    filterDate: filterDate
-                })
-            })
-            .then(response => response.text())
-            .then(message => {
-                alert(message);
-            })
-            .catch(error => {
-                console.error('Error during file transfer:', error);
-                alert('An error occurred during file transfer. Please try again.');
-            });
-        }
-    </script>
-</body>
-</html>
---
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -371,6 +104,7 @@ public class LoginRequest {
             margin-bottom: 10px;
             display: flex;
             justify-content: space-between;
+            align-items: center;
         }
         .file-list div span {
             flex-grow: 1;
@@ -415,6 +149,56 @@ public class LoginRequest {
         }
         table th {
             background-color: #f2f2f2;
+        }
+        /* Custom File Input */
+        .file-input-wrapper {
+            position: relative;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .file-input-wrapper input[type="file"] {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            opacity: 0;
+            cursor: pointer;
+        }
+        .custom-file-button {
+            background-color: #28a745;
+            color: white;
+            padding: 10px 20px;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+            display: inline-block;
+            cursor: pointer;
+        }
+        .custom-file-button:hover {
+            background-color: #218838;
+        }
+        .upload-files-btn {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .upload-files-btn button {
+            background-color: #28a745;
+            color: white;
+            padding: 15px 30px;
+            border: none;
+            border-radius: 5px;
+            font-size: 18px;
+            transition: background-color 0.3s;
+            cursor: pointer;
+            display: block;
+            width: 100%;
+            max-width: 200px;
+            margin: 0 auto;
+        }
+        .upload-files-btn button:hover {
+            background-color: #218838;
         }
         @media (max-width: 768px) {
             .sidebar {
@@ -540,12 +324,16 @@ public class LoginRequest {
             <!-- Upload Section -->
             <div id="uploadSection" class="hidden">
                 <h3>Upload Files</h3>
-                <input type="file" id="fileInput" multiple>
-                <button onclick="addFiles()">Add Files</button>
+                <div class="file-input-wrapper">
+                    <button class="custom-file-button">Choose Files</button>
+                    <input type="file" id="fileInput" multiple onchange="displaySelectedFiles()">
+                </div>
                 <div class="file-list" id="fileList">
                     <!-- List of files to be uploaded -->
                 </div>
-                <button onclick="openUploadModal()">Upload Files</button>
+                <div class="upload-files-btn">
+                    <button onclick="openUploadModal()">Upload Files</button>
+                </div>
             </div>
         </div>
     </div>
@@ -639,28 +427,71 @@ public class LoginRequest {
             historyTable.appendChild(historyRow);
         }
 
-        function addFiles() {
-            const fileInput = document.getElementById('fileInput');
-            for (const file of fileInput.files) {
-                filesToUpload.push(file);
-                displayFile(file);
-            }
-            fileInput.value = ''; // Clear the input
-        }
+        
 
-        function displayFile(file) {
-            const fileList = document.getElementById('fileList');
-            const fileItem = document.createElement('div');
-            fileItem.innerHTML = `<span>${file.name}</span> <button onclick="removeFile('${file.name}')">Remove</button>`;
-            fileList.appendChild(fileItem);
-        }
+       
 
-        function removeFile(fileName) {
-            filesToUpload = filesToUpload.filter(file => file.name !== fileName);
-            const fileList = document.getElementById('fileList');
-            fileList.innerHTML = '';
-            filesToUpload.forEach(displayFile);
+function displaySelectedFiles() {
+    const fileInput = document.getElementById('fileInput');
+    const fileList = document.getElementById('fileList');
+
+    // Add newly selected files to the filesToUpload array
+    for (const file of fileInput.files) {
+        // Check if the file is already in the array to avoid duplicates
+        if (!filesToUpload.some(f => f.name === file.name && f.size === file.size)) {
+            filesToUpload.push(file);
         }
+    }
+
+    // Clear the current list
+    fileList.innerHTML = '';
+
+    // Display all files in the filesToUpload array
+    filesToUpload.forEach(file => {
+        // Create a new div for each file
+        const fileItem = document.createElement('div');
+        fileItem.style.display = 'flex';
+        fileItem.style.justifyContent = 'space-between';
+        fileItem.style.alignItems = 'center';
+        fileItem.style.padding = '5px 0';
+
+        // Create a span to hold the file name
+        const fileName = document.createElement('span');
+        fileName.textContent = file.name;
+
+        // Create a remove button
+        const removeButton = document.createElement('button');
+        removeButton.textContent = 'Remove';
+        removeButton.style.backgroundColor = '#dc3545';
+        removeButton.style.color = 'white';
+        removeButton.style.border = 'none';
+        removeButton.style.padding = '5px 10px';
+        removeButton.style.borderRadius = '3px';
+        removeButton.style.cursor = 'pointer';
+        removeButton.onclick = function() {
+            removeFile(file.name);
+        };
+
+        // Append file name and remove button to the file item
+        fileItem.appendChild(fileName);
+        fileItem.appendChild(removeButton);
+
+        // Append the file item to the file list
+        fileList.appendChild(fileItem);
+    });
+
+    // Clear the file input to allow selecting the same file(s) again if needed
+    fileInput.value = '';
+}
+
+function removeFile(fileName) {
+    // Remove the file from the filesToUpload array
+    filesToUpload = filesToUpload.filter(file => file.name !== fileName);
+
+    // Refresh the display
+    displaySelectedFiles();
+}
+
 
         function openUploadModal() {
             if (filesToUpload.length === 0) {
@@ -708,186 +539,3 @@ public class LoginRequest {
     </script>
 </body>
 </html>
---
-package com.example.demo;
-
-public class TransferRequest {
-    private String sourcePath;
-    private String destServer;
-    private String destPath;
-    private String filterDate;
-    private String username;
-    private String password;
-    private String sourceServer;
-
-    // Getters and Setters
-    public String getSourcePath() {
-        return sourcePath;
-    }
-
-    public void setSourcePath(String sourcePath) {
-        this.sourcePath = sourcePath;
-    }
-
-    public String getDestServer() {
-        return destServer;
-    }
-
-    public void setDestServer(String destServer) {
-        this.destServer = destServer;
-    }
-
-    public String getDestPath() {
-        return destPath;
-    }
-
-    public void setDestPath(String destPath) {
-        this.destPath = destPath;
-    }
-
-    public String getFilterDate() {
-        return filterDate;
-    }
-
-    public void setFilterDate(String filterDate) {
-        this.filterDate = filterDate;
-    }
-
-    public String getUsername() {
-        return username;
-    }
-
-    public void setUsername(String username) {
-        this.username = username;
-    }
-
-    public String getPassword() {
-        return password;
-    }
-
-    public void setPassword(String password) {
-        this.password = password;
-    }
-
-    public String getSourceServer() {
-        return sourceServer;
-    }
-
-    public void setSourceServer(String sourceServer) {
-        this.sourceServer = sourceServer;
-    }
-}
---
-
-
-package com.example.demo;
-
-import org.springframework.http.HttpStatus;
-import org.springframework.http.ResponseEntity;
-import org.springframework.web.bind.annotation.*;
-
-import java.io.BufferedReader;
-import java.io.File;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.nio.file.Files;
-import java.nio.file.Paths;
-import java.util.ArrayList;
-import java.util.List;
-
-@RestController
-@RequestMapping("/api") 
-public class FileTransferController {
-
-    @PostMapping("/login")
-    public ResponseEntity<String> login(@RequestBody LoginRequest request) {
-        boolean success = verifyCredentials(request.getUsername(), request.getPassword(), request.getServerIp());
-        if (success) {
-            return ResponseEntity.ok("Login successful");
-        } else {
-            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body("Invalid credentials");
-        }
-    }
-
-    @PostMapping("/transfer")
-    public ResponseEntity<String> transferFiles(@RequestBody TransferRequest request) {
-        try {
-            executeFileTransfer(request);
-            return ResponseEntity.ok("File transfer completed successfully.");
-        } catch (Exception e) {
-            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("An error occurred: " + e.getMessage());
-        }
-    }
-
-    private boolean verifyCredentials(String username, String password, String serverIp) {
-        try {
-            ProcessBuilder pb = new ProcessBuilder("plink", "-pw", password, username + "@" + serverIp, "echo Connection successful");
-            Process process = pb.start();
-            int exitCode = process.waitFor();
-            return exitCode == 0;
-        } catch (Exception ex) {
-            ex.printStackTrace();
-            return false;
-        }
-    }
-
-    private void executeFileTransfer(TransferRequest request) throws IOException, InterruptedException {
-        String sourceUser = request.getUsername();
-        String sourcePass = request.getPassword();
-        String sourceServer = request.getSourceServer();
-        String sourcePath = request.getSourcePath();
-        String localPath = "/tmp/local_transfer";  // Adjust this path as needed
-        String destServer = request.getDestServer();
-        String destPath = request.getDestPath();
-        String filterDate = request.getFilterDate();
-
-        File localDir = new File(localPath);
-        if (!localDir.exists() && !localDir.mkdirs()) {
-            throw new IOException("Failed to create local download folder.");
-        }
-
-        ProcessBuilder pbCheckDestPath = new ProcessBuilder("plink", "-pw", sourcePass, sourceUser + "@" + destServer, "mkdir -p " + destPath);
-        Process checkDestPathProcess = pbCheckDestPath.start();
-        int checkDestPathExitCode = checkDestPathProcess.waitFor();
-        if (checkDestPathExitCode != 0) {
-            throw new IOException("Failed to create destination path on the destination server.");
-        }
-
-        List<String> fileList = new ArrayList<>();
-        ProcessBuilder pb = new ProcessBuilder("plink", "-pw", sourcePass, sourceUser + "@" + sourceServer, "find " + sourcePath + " -type f -newermt " + filterDate + " ! -newermt " + filterDate + "T23:59:59");
-        Process process = pb.start();
-
-        try (BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()))) {
-            String line;
-            while ((line = reader.readLine()) != null) {
-                fileList.add(line);
-            }
-        }
-
-        int exitCode = process.waitFor();
-        if (exitCode != 0) {
-            throw new IOException("Failed to list files on the source server.");
-        }
-
-        for (String file : fileList) {
-            String fileName = Paths.get(file).getFileName().toString();
-
-            ProcessBuilder pbDownload = new ProcessBuilder("pscp", "-pw", sourcePass, sourceUser + "@" + sourceServer + ":" + file, localPath);
-            Process downloadProcess = pbDownload.start();
-            int downloadExitCode = downloadProcess.waitFor();
-            if (downloadExitCode != 0) {
-                throw new IOException("Failed to download " + fileName);
-            }
-
-            ProcessBuilder pbUpload = new ProcessBuilder("pscp", "-pw", sourcePass, localPath + "/" + fileName, sourceUser + "@" + destServer + ":" + destPath);
-            Process uploadProcess = pbUpload.start();
-            int uploadExitCode = uploadProcess.waitFor();
-            if (uploadExitCode != 0) {
-                throw new IOException("Failed to upload " + fileName);
-            }
-
-            Files.delete(Paths.get(localPath + "/" + fileName));
-        }
-    }
-}
---
