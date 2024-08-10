@@ -1,0 +1,134 @@
+@echo off
+setlocal enabledelayedexpansion
+
+:: Retrieve username and password from master batch file
+set USERNAME=%1
+set PASSWORD=%2
+
+:: Prompt the user for the issue key
+set /p ISSUE_KEY="Enter the Jira issue key (e.g., ABC-123): "
+
+:: Display status options
+echo Select the desired status:
+echo [1] Open
+echo [2] To Do
+echo [3] Refining
+echo [4] Waiting for Dependencies
+echo [5] Ready to Start
+echo [6] In Progress
+echo [7] Done
+
+:: Prompt the user to select a status
+set /p status_choice="Enter the number corresponding to the desired status: "
+
+:: Map the user's choice to the corresponding status
+set status[1]=open
+set status[2]=todo
+set status[3]=refining
+set status[4]=waiting for dependencies
+set status[5]=ready to start
+set status[6]=in progress
+set status[7]=done
+
+set desired_status=!status[%status_choice%]!
+
+:: Check if the user provided a valid option
+if "!desired_status!"=="" (
+    echo Invalid selection. Exiting...
+    exit /b 1
+)
+
+echo You selected: !desired_status!
+
+:: Define the status values in an array for processing
+set status[0]=open
+set status[1]=todo
+set status[2]=refining
+set status[3]=waiting for dependencies
+set status[4]=ready to start
+set status[5]=in progress
+set status[6]=done
+
+:: Set the Jira URL
+set JIRA_URL=https://track.td.com
+
+:START_LOOP
+:: Get the current status of the Jira issue
+for /f "tokens=*" %%a in ('curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%?fields=status^| findstr /i "name"') do (
+    set "current_status=%%a"
+)
+
+:: Extract current status name from JSON
+for /f "tokens=3 delims=:," %%b in ("%current_status%") do (
+    set current_status=%%b
+    set current_status=!current_status:"=!
+)
+
+echo Current status is: !current_status!
+
+:: Loop through the status array to find the current and desired status positions
+set current_index=-1
+set desired_index=-1
+for /L %%i in (0,1,6) do (
+    if /i "!status[%%i]!"=="!current_status!" (
+        set current_index=%%i
+    )
+    if /i "!status[%%i]!"=="!desired_status!" (
+        set desired_index=%%i
+    )
+)
+
+:: Check if current and desired status are found
+if !current_index!==-1 (
+    echo Current status not found in array. Exiting...
+    exit /b 1
+)
+if !desired_index!==-1 (
+    echo Desired status not found in array. Exiting...
+    exit /b 1
+)
+
+:: Loop through the statuses to transition to the desired state
+for /L %%j in (!current_index!,1,!desired_index!) do (
+    set next_status=!status[%%j]!
+
+    :: Check if we've already reached the desired status
+    if "!next_status!"=="!desired_status!" (
+        echo Desired status !desired_status! reached.
+        goto END
+    )
+
+    :: Get available transitions for the current status
+    set TRANSITION_URL=%JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%/transitions
+    curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %TRANSITION_URL% > transitions.json
+
+    :: Search for the next status in the available transitions
+    set transition_id=
+    for /f "tokens=*" %%c in ('findstr /i /c:"!next_status!" transitions.json') do (
+        for /f "tokens=3 delims=:," %%d in ("%%c") do (
+            set transition_id=%%d
+            set transition_id=!transition_id:"=!
+        )
+    )
+
+    :: If a transition is found, apply it
+    if defined transition_id (
+        echo Transitioning to: !next_status! with ID: !transition_id!
+        curl -u %USERNAME%:%PASSWORD% -X POST --data "{\"transition\": {\"id\": \"!transition_id!\"}}" -H "Content-Type: application/json" %TRANSITION_URL%
+    ) else (
+        echo Transition to !next_status! not available. Scanning transitions...
+        :: Code to find the best available transition (not implemented fully in this example)
+    )
+)
+
+:: Check if desired state was reached
+if !current_status!==!desired_status! (
+    echo Reached the end of the array, but desired status not found.
+    echo Restarting loop to try and reach desired status...
+    goto START_LOOP
+)
+
+:END
+echo Transition process completed.
+
+endlocal
