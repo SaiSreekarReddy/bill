@@ -5,23 +5,18 @@ setlocal enabledelayedexpansion
 set USERNAME=%1
 set PASSWORD=%2
 
-:: Define the status cycle in an ordered array
-set status_cycle[0]=open
-set status_cycle[1]=todo
-set status_cycle[2]=refining
-set status_cycle[3]=waiting for dependencies
-set status_cycle[4]=ready to start
-set status_cycle[5]=in progress
-set status_cycle[6]=done
+:: Define the status cycle
+set status_cycle=open todo refining "waiting for dependencies" "ready to start" "in progress" done
 
 :ISSUE_LOOP
 :: Reset variables
-set ISSUE_KEY=
-set current_status=
-set desired_status=
-set current_index=
-set desired_index=
-set transition_id=
+set "ISSUE_KEY="
+set "desired_status="
+set "current_status="
+set "next_status="
+set "transition_id="
+set "count=0"
+set "status_choice_count=0"
 
 :: Prompt the user for the issue key
 set /p ISSUE_KEY="Enter the Jira issue key (e.g., ABC-123) or type 'exit' to quit: "
@@ -34,21 +29,34 @@ if /i "%ISSUE_KEY%"=="exit" (
 
 :: Display status options
 echo Select the desired status:
-for /L %%i in (0,1,6) do (
-    echo [%%i] !status_cycle[%%i]!
+for %%s in (%status_cycle%) do (
+    set /a count+=1
+    echo [!count!] %%s
 )
 
 :: Prompt the user to select a status
 set /p status_choice="Enter the number corresponding to the desired status: "
 
-:: Check if the user provided a valid option
-if "%status_cycle[%status_choice%]%"=="" (
-    echo Invalid selection. Please try again.
-    goto ISSUE_LOOP
+:: Map the user's choice to the corresponding status
+for /l %%i in (1,1,%count%) do (
+    if %status_choice%==%%i (
+        for %%s in (%status_cycle%) do (
+            set /a status_choice_count+=1
+            if !status_choice_count! equ %%i set "desired_status=%%s"
+        )
+    )
 )
 
-set desired_status=%status_cycle[%status_choice%]%
+:: Check if the user provided a valid option
+if "!desired_status!"=="" (
+    echo Invalid selection. Exiting...
+    exit /b 1
+)
+
 echo You selected: !desired_status!
+
+:: Set the Jira URL
+set JIRA_URL=https://track.td.com
 
 :: Get the current status of the Jira issue
 curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%?fields=status > current_status.json
@@ -58,7 +66,7 @@ for /f "tokens=2 delims=:" %%a in ('findstr /i "\"name\"" current_status.json') 
     set "current_status=%%a"
 )
 
-:: Clean up the extracted value by removing unwanted characters
+:: Clean up the extracted value
 set current_status=%current_status:,=%
 set current_status=%current_status:"=%
 set current_status=%current_status: }=%
@@ -66,56 +74,39 @@ set current_status=%current_status:]=%
 
 echo Current status is: !current_status!
 
-:: Determine the current and desired indices in the status cycle
-for /L %%i in (0,1,6) do (
-    if /i "!status_cycle[%%i]!"=="!current_status!" set current_index=%%i
-    if /i "!status_cycle[%%i]!"=="!desired_status!" set desired_index=%%i
+:: Determine the optimal path
+set "found_start="
+set "found_desired="
+for %%s in (%status_cycle%) do (
+    if /i "!current_status!"=="%%s" set found_start=1
+    if /i "!desired_status!"=="%%s" if defined found_start set found_desired=1
+    if defined found_start if not defined found_desired set "next_status=%%s"
 )
 
-:: If the current status is the desired status, we're done
-if "%current_index%"=="%desired_index%" (
-    echo The issue is already in the desired status.
-    goto NEXT_ISSUE
+:: Directly transition if path not found
+if not defined next_status (
+    echo Optimal path not found, attempting direct transition to !desired_status!.
+    set "next_status=!desired_status!"
 )
 
-:: Determine the transition path
-if "%current_index%" NEQ "" if "%desired_index%" NEQ "" if %desired_index% GTR %current_index% (
-    echo Moving forward through the cycle...
-    set /A "steps=%desired_index%-%current_index%"
+:: Get available transitions for the current status
+set TRANSITION_URL=%JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%/transitions
+curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %TRANSITION_URL% > transitions.json
+
+:: Search for the next status in the available transitions
+for /f "tokens=3 delims=:," %%c in ('findstr /i /c:"!next_status!" transitions.json') do (
+    set "transition_id=%%c"
+    set "transition_id=!transition_id:"=!"
+)
+
+:: If a transition is found, apply it
+if defined transition_id (
+    echo Transitioning to: !next_status! with ID: !transition_id!
+    curl -u %USERNAME%:%PASSWORD% -X POST --data "{\"transition\": {\"id\": \"!transition_id!\"}}" -H "Content-Type: application/json" %TRANSITION_URL%
 ) else (
-    echo Transitioning directly to the desired state...
-    set steps=1
+    echo No valid transition found to !next_status!. Please check the Jira workflow.
 )
 
-:: Apply the necessary transitions
-for /L %%i in (1,1,%steps%) do (
-    :: Get available transitions for the current status
-    set TRANSITION_URL=%JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%/transitions
-    curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %TRANSITION_URL% > transitions.json
-
-    :: Find the appropriate transition ID for the next status
-    set next_status=!status_cycle[%current_index%+%%i]!
-    set transition_id=
-    for /f "tokens=*" %%c in ('findstr /i /c:"!next_status!" transitions.json') do (
-        for /f "tokens=3 delims=:," %%d in ("%%c") do (
-            set transition_id=%%d
-            set transition_id=!transition_id:"=!
-        )
-    )
-
-    :: If a transition is found, apply it
-    if defined transition_id (
-        echo Transitioning to: !next_status! with ID: !transition_id!
-        curl -s -u %USERNAME%:%PASSWORD% -X POST --data "{\"transition\": {\"id\": \"!transition_id!\"}}" -H "Content-Type: application/json" %TRANSITION_URL%
-    ) else (
-        echo Transition to !next_status! not available.
-        goto NEXT_ISSUE
-    )
-)
-
-:NEXT_ISSUE
-echo Transition process completed for issue %ISSUE_KEY%.
-echo.
 goto ISSUE_LOOP
 
 :END
