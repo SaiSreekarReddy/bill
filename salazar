@@ -61,6 +61,11 @@ set JIRA_URL=https://track.td.com
 :: Get the current status of the Jira issue
 curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%?fields=status > current_status.json
 
+:: Debug: Output the JSON to ensure it's correct
+echo --- DEBUG: JSON Content ---
+type current_status.json
+echo ---------------------------
+
 :: Initialize the current_status variable
 set "current_status="
 
@@ -71,6 +76,11 @@ for /f "delims=" %%i in (current_status.json) do (
     )
 )
 
+:: Debug: Output the status line
+echo --- DEBUG: Status Line ---
+echo !status_line!
+echo --------------------------
+
 :: Extract the name field from the status_line
 for /f "tokens=1,2 delims=:," %%a in ("%status_line%") do (
     if "%%a"==" \"name\"" set "current_status=%%~b"
@@ -78,6 +88,11 @@ for /f "tokens=1,2 delims=:," %%a in ("%status_line%") do (
 
 :: Clean up the extracted value
 set current_status=%current_status:"=%
+
+:: Debug: Output the extracted status
+echo --- DEBUG: Extracted Status ---
+echo !current_status!
+echo --------------------------------
 
 :: Check if current_status was set correctly
 if "%current_status%"=="" (
