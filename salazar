@@ -70,20 +70,17 @@ echo ---------------------------
 set "current_status="
 
 :: Extract the "name" field under the "status" section from the JSON
-for /f "delims=" %%i in (current_status.json) do (
-    echo %%i | findstr /i "\"name\"" >nul && (
-        echo %%i | findstr /i "\"status\"" >nul && set "status_line=%%i"
+for /f "tokens=*" %%i in (current_status.json) do (
+    echo %%i | findstr /i "\"status\"" >nul && (
+        set "status_line=%%i"
+        goto ProcessStatus
     )
 )
 
-:: Debug: Output the status line
-echo --- DEBUG: Status Line ---
-echo !status_line!
-echo --------------------------
-
+:ProcessStatus
 :: Extract the name field from the status_line
 for /f "tokens=1,2 delims=:," %%a in ("%status_line%") do (
-    if "%%a"==" \"name\"" set "current_status=%%~b"
+    if "%%a"=="\"name\"" set "current_status=%%~b"
 )
 
 :: Clean up the extracted value
