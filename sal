@@ -61,16 +61,18 @@ set JIRA_URL=https://track.td.com
 :: Get the current status of the Jira issue
 curl -s -u %USERNAME%:%PASSWORD% -X GET -H "Content-Type: application/json" %JIRA_URL%/rest/api/2/issue/%ISSUE_KEY%?fields=status > current_status.json
 
-:: Extract the last status name from JSON
-for /f "tokens=2 delims=:" %%a in ('findstr /i "\"name\"" current_status.json') do (
-    set "current_status=%%a"
+:: Find the line containing "status"
+for /f "delims=" %%i in (current_status.json) do (
+    echo %%i | findstr /i "\"status\"" >nul && set "status_line=%%i"
+)
+
+:: Extract the "name" field from the status line
+for /f "tokens=1,2 delims=:{}," %%a in ("%status_line%") do (
+    if "%%a"=="\"name\"" set "current_status=%%~b"
 )
 
 :: Clean up the extracted value
-set current_status=%current_status:,=%
-set current_status=%current_status:"=%
-set current_status=%current_status: }=%
-set current_status=%current_status:]=%
+set current_status=%current_status:~1,-1%
 
 echo Current status is: !current_status!
 
