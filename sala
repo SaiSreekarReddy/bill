@@ -1,0 +1,16 @@
+[Unit]
+Description=Your Spring Boot Application
+After=syslog.target
+
+[Service]
+User=your-username
+ExecStart=/usr/bin/java -jar /path/to/deploy/your-app-name-version.jar
+SuccessExitStatus=143
+Restart=always
+RestartSec=10
+StandardOutput=syslog
+StandardError=syslog
+SyslogIdentifier=your-app-name
+
+[Install]
+WantedBy=multi-user.target
