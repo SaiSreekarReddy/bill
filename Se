@@ -1,0 +1,55 @@
+import javax.swing.*;
+
+public class SimpleSwingApp {
+
+    public static void main(String[] args) {
+        // Hardcoded username and password
+        String username = "your_username";
+        String password = "your_password";
+
+        // Create and set up the window.
+        JFrame frame = new JFrame("Simple SSH GUI");
+        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
+        frame.setSize(300, 200);
+
+        // Create a panel to hold components
+        JPanel panel = new JPanel();
+        frame.add(panel);
+        placeComponents(panel, username, password);
+
+        // Display the window.
+        frame.setVisible(true);
+    }
+
+    private static void placeComponents(JPanel panel, String username, String password) {
+        panel.setLayout(null);
+
+        // IP Address Label
+        JLabel ipLabel = new JLabel("Server IP:");
+        ipLabel.setBounds(10, 20, 80, 25);
+        panel.add(ipLabel);
+
+        // IP Address Text Field
+        JTextField ipText = new JTextField(20);
+        ipText.setBounds(100, 20, 165, 25);
+        panel.add(ipText);
+
+        // Connect Button
+        JButton connectButton = new JButton("Connect");
+        connectButton.setBounds(10, 80, 150, 25);
+        panel.add(connectButton);
+
+        // Action Listener for the Connect Button
+        connectButton.addActionListener(e -> {
+            String ipAddress = ipText.getText();
+            if (ipAddress.isEmpty()) {
+                JOptionPane.showMessageDialog(panel, "Please enter a valid IP address.", "Error", JOptionPane.ERROR_MESSAGE);
+            } else {
+                // Here you could call a method to handle the SSH connection.
+                // For demonstration, we'll just show a message.
+                JOptionPane.showMessageDialog(panel, "Attempting to connect to " + ipAddress + " with username " + username + ".", "Info", JOptionPane.INFORMATION_MESSAGE);
+                // Simulate connection logic here
+            }
+        });
+    }
+}
