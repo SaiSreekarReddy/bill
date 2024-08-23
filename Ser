@@ -1,0 +1,165 @@
+<dependency>
+    <groupId>com.jcraft</groupId>
+    <artifactId>jsch</artifactId>
+    <version>0.1.55</version>
+</dependency>
+
+________
+
+import com.jcraft.jsch.*;
+
+import java.io.InputStream;
+import java.io.OutputStream;
+
+public class SSHExample {
+
+    public static void main(String[] args) {
+        if (args.length < 3) {
+            System.out.println("Usage: java SSHExample <host> <username> <password>");
+            System.exit(1);
+        }
+
+        String host = args[0];
+        String user = args[1];
+        String password = args[2];
+        String sudoPassword = password;  // Assuming the sudo password is the same as the user password.
+
+        try {
+            // Set up JSch and session
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(user, host, 22);
+            session.setPassword(password);
+
+            // Avoid asking for key confirmation
+            session.setConfig("StrictHostKeyChecking", "no");
+
+            // Connect to the server
+            session.connect();
+
+            // Open a channel for executing commands
+            ChannelShell channel = (ChannelShell) session.openChannel("shell");
+
+            // Set up input and output streams for the channel
+            OutputStream inputToChannel = channel.getOutputStream();
+            InputStream outputFromChannel = channel.getInputStream();
+            channel.connect();
+
+            // Execute sudo su
+            inputToChannel.write(("sudo su\n").getBytes());
+            inputToChannel.flush();
+
+            // Provide the sudo password
+            inputToChannel.write((sudoPassword + "\n").getBytes());
+            inputToChannel.flush();
+
+            // Keep the shell interactive
+            byte[] tmp = new byte[1024];
+            while (true) {
+                while (outputFromChannel.available() > 0) {
+                    int i = outputFromChannel.read(tmp, 0, 1024);
+                    if (i < 0) break;
+                    System.out.print(new String(tmp, 0, i));
+                }
+                if (channel.isClosed()) {
+                    if (outputFromChannel.available() > 0) continue;
+                    System.out.println("exit-status: " + channel.getExitStatus());
+                    break;
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception ee) {
+                }
+            }
+
+            // Disconnect from the channel and session
+            channel.disconnect();
+            session.disconnect();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+_________
+
+import com.jcraft.jsch.*;
+import javax.swing.JOptionPane;
+import java.io.InputStream;
+import java.io.OutputStream;
+
+public class SSHExample {
+
+    public static void main(String[] args) {
+        // Hard-code the username and password
+        String user = "your_username";
+        String password = "your_password";
+
+        // Prompt the user for the IP address using a simple GUI
+        String host = JOptionPane.showInputDialog(null, "Enter the IP address of the server:", "Server IP", JOptionPane.PLAIN_MESSAGE);
+
+        // If no IP address is provided, exit the program
+        if (host == null || host.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(null, "No IP address provided. Exiting.", "Error", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+        }
+
+        String sudoPassword = password;  // Assuming the sudo password is the same as the user password.
+
+        try {
+            // Set up JSch and session
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(user, host, 22);
+            session.setPassword(password);
+
+            // Avoid asking for key confirmation
+            session.setConfig("StrictHostKeyChecking", "no");
+
+            // Connect to the server
+            session.connect();
+
+            // Open a channel for executing commands
+            ChannelShell channel = (ChannelShell) session.openChannel("shell");
+
+            // Set up input and output streams for the channel
+            OutputStream inputToChannel = channel.getOutputStream();
+            InputStream outputFromChannel = channel.getInputStream();
+            channel.connect();
+
+            // Execute sudo su
+            inputToChannel.write(("sudo su\n").getBytes());
+            inputToChannel.flush();
+
+            // Provide the sudo password
+            inputToChannel.write((sudoPassword + "\n").getBytes());
+            inputToChannel.flush();
+
+            // Keep the shell interactive
+            byte[] tmp = new byte[1024];
+            while (true) {
+                while (outputFromChannel.available() > 0) {
+                    int i = outputFromChannel.read(tmp, 0, 1024);
+                    if (i < 0) break;
+                    System.out.print(new String(tmp, 0, i));
+                }
+                if (channel.isClosed()) {
+                    if (outputFromChannel.available() > 0) continue;
+                    System.out.println("exit-status: " + channel.getExitStatus());
+                    break;
+                }
+                try {
+                    Thread.sleep(1000);
+                } catch (Exception ee) {
+                }
+            }
+
+            // Disconnect from the channel and session
+            channel.disconnect();
+            session.disconnect();
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
+    }
+}
+
+
+
