@@ -1,6 +1,10 @@
+import com.jcraft.jsch.*;
 import javax.swing.*;
+import java.awt.*;
+import java.io.InputStream;
+import java.io.OutputStream;
 
-public class SimpleSwingApp {
+public class SSHSwingTerminal {
 
     public static void main(String[] args) {
         // Hardcoded username and password
@@ -8,48 +12,95 @@ public class SimpleSwingApp {
         String password = "your_password";
 
         // Create and set up the window.
-        JFrame frame = new JFrame("Simple SSH GUI");
+        JFrame frame = new JFrame("SSH Terminal");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(300, 200);
+        frame.setSize(600, 400);
+
+        // Create a text area for the terminal output
+        JTextArea terminalArea = new JTextArea();
+        terminalArea.setEditable(false);
+        JScrollPane scrollPane = new JScrollPane(terminalArea);
+
+        // Create a text field for command input
+        JTextField commandField = new JTextField();
 
         // Create a panel to hold components
-        JPanel panel = new JPanel();
+        JPanel panel = new JPanel(new BorderLayout());
         frame.add(panel);
-        placeComponents(panel, username, password);
+
+        panel.add(scrollPane, BorderLayout.CENTER);
+        panel.add(commandField, BorderLayout.SOUTH);
 
         // Display the window.
         frame.setVisible(true);
-    }
 
-    private static void placeComponents(JPanel panel, String username, String password) {
-        panel.setLayout(null);
+        // Prompt the user for the IP address
+        String host = JOptionPane.showInputDialog(null, "Enter the IP address of the server:", "Server IP", JOptionPane.PLAIN_MESSAGE);
 
-        // IP Address Label
-        JLabel ipLabel = new JLabel("Server IP:");
-        ipLabel.setBounds(10, 20, 80, 25);
-        panel.add(ipLabel);
+        if (host == null || host.trim().isEmpty()) {
+            JOptionPane.showMessageDialog(panel, "No IP address provided. Exiting.", "Error", JOptionPane.ERROR_MESSAGE);
+            System.exit(1);
+        }
 
-        // IP Address Text Field
-        JTextField ipText = new JTextField(20);
-        ipText.setBounds(100, 20, 165, 25);
-        panel.add(ipText);
+        try {
+            // Set up JSch and session
+            JSch jsch = new JSch();
+            Session session = jsch.getSession(username, host, 22);
+            session.setPassword(password);
 
-        // Connect Button
-        JButton connectButton = new JButton("Connect");
-        connectButton.setBounds(10, 80, 150, 25);
-        panel.add(connectButton);
+            // Avoid asking for key confirmation
+            session.setConfig("StrictHostKeyChecking", "no");
 
-        // Action Listener for the Connect Button
-        connectButton.addActionListener(e -> {
-            String ipAddress = ipText.getText();
-            if (ipAddress.isEmpty()) {
-                JOptionPane.showMessageDialog(panel, "Please enter a valid IP address.", "Error", JOptionPane.ERROR_MESSAGE);
-            } else {
-                // Here you could call a method to handle the SSH connection.
-                // For demonstration, we'll just show a message.
-                JOptionPane.showMessageDialog(panel, "Attempting to connect to " + ipAddress + " with username " + username + ".", "Info", JOptionPane.INFORMATION_MESSAGE);
-                // Simulate connection logic here
-            }
-        });
+            // Connect to the server
+            session.connect();
+
+            // Open a channel for executing commands
+            ChannelShell channel = (ChannelShell) session.openChannel("shell");
+            channel.setOutputStream(System.out);
+            InputStream in = channel.getInputStream();
+            OutputStream out = channel.getOutputStream();
+            channel.connect();
+
+            // Send the sudo su command
+            out.write(("sudo su\n").getBytes());
+            out.flush();
+
+            // Handle the sudo password prompt
+            new Thread(() -> {
+                try {
+                    byte[] buffer = new byte[1024];
+                    int read;
+                    while ((read = in.read(buffer)) != -1) {
+                        String output = new String(buffer, 0, read);
+                        terminalArea.append(output);
+                        terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
+
+                        // Check if the output contains the sudo password prompt
+                        if (output.contains("[sudo] password")) {
+                            // Send the password for sudo
+                            out.write((password + "\n").getBytes());
+                            out.flush();
+                        }
+                    }
+                } catch (Exception e) {
+                    e.printStackTrace();
+                }
+            }).start();
+
+            // Add an action listener to send commands when the user presses Enter
+            commandField.addActionListener(e -> {
+                try {
+                    String command = commandField.getText() + "\n";
+                    out.write(command.getBytes());
+                    out.flush();
+                    commandField.setText("");
+                } catch (Exception ex) {
+                    ex.printStackTrace();
+                }
+            });
+
+        } catch (Exception e) {
+            e.printStackTrace();
+        }
     }
 }
