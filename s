@@ -1,6 +1,7 @@
 import paramiko
 import time
 import readline
+import getpass
 import glob
 
 # Common shell commands to be suggested
@@ -46,62 +47,68 @@ def detect_server_type(channel):
     return detected_type
 
 def ssh_to_server():
-    host = "your_vm_ip"  # Replace with your server's IP
-    username = "your_username"  # Replace with your SSH username
-    password = "your_password"  # Replace with your SSH password
+    # Prompt user for server details
+    host = input("Enter the server IP address: ")
+    username = input("Enter your SSH username: ")
+    password = getpass.getpass("Enter your SSH password: ")
 
     # Initialize the SSH client
     ssh = paramiko.SSHClient()
     ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
-    # Connect to the server
-    ssh.connect(host, username=username, password=password)
+    try:
+        # Connect to the server
+        ssh.connect(host, username=username, password=password)
 
-    # Open an interactive shell session
-    channel = ssh.invoke_shell()
+        # Open an interactive shell session
+        channel = ssh.invoke_shell()
 
-    # Execute the sudo su command
-    channel.send('sudo su\n')
-    time.sleep(1)
-    channel.send(password + '\n')
-    time.sleep(1)  # Give it some time to switch users
+        # Execute the sudo su command
+        channel.send('sudo su\n')
+        time.sleep(1)
+        channel.send(password + '\n')
+        time.sleep(1)  # Give it some time to switch users
 
-    # Read the output of the commands
-    while channel.recv_ready():
-        output = channel.recv(1024).decode('utf-8')
-        print(output)
-
-    # Detect server type based on directories in /opt
-    server_type = detect_server_type(channel)
-    print(f"Server Type Detected: {server_type}")
-
-    # Set up tab-completion
-    readline.set_completer(complete_path_and_commands)
-    readline.parse_and_bind("tab: complete")
-
-    # Interactive loop to keep the session open
-    while True:
-        try:
-            # Input with tab-completion for file paths and commands
-            command = input("Enter command (type 'exit' to close): ")
-        except KeyboardInterrupt:
-            continue  # Handle Ctrl+C
-        except EOFError:
-            break  # Handle Ctrl+D
-
-        if command.lower() == "exit":
-            break
-
-        channel.send(command + '\n')
-        time.sleep(1)  # Wait for the command to execute
-
+        # Read the output of the commands
         while channel.recv_ready():
             output = channel.recv(1024).decode('utf-8')
             print(output)
 
-    # Close the connection
-    channel.close()
-    ssh.close()
+        # Detect server type based on directories in /opt
+        server_type = detect_server_type(channel)
+        print(f"Server Type Detected: {server_type}")
+
+        # Set up tab-completion
+        readline.set_completer(complete_path_and_commands)
+        readline.parse_and_bind("tab: complete")
+
+        # Interactive loop to keep the session open
+        while True:
+            try:
+                # Input with tab-completion for file paths and commands
+                command = input("Enter command (type 'exit' to close): ")
+            except KeyboardInterrupt:
+                continue  # Handle Ctrl+C
+            except EOFError:
+                break  # Handle Ctrl+D
+
+            if command.lower() == "exit":
+                break
+
+            channel.send(command + '\n')
+            time.sleep(1)  # Wait for the command to execute
+
+            while channel.recv_ready():
+                output = channel.recv(1024).decode('utf-8')
+                print(output)
+
+        # Close the connection
+        channel.close()
+        ssh.close()
+
+    except Exception as e:
+        print(f"Failed to connect: {e}")
 
 # Run the function
-ssh_to_server()
+if __name__ == "__main__":
+    ssh_to_server()
