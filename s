@@ -1,6 +1,5 @@
 import paramiko
 import time
-import os
 import readline
 import glob
 
@@ -24,25 +23,26 @@ def complete_path_and_commands(text, state):
         return None
 
 def detect_server_type(channel):
-    """Detect the server type based on known directory structure."""
-    server_paths = {
-        "Spring Boot": "/opt/springboot/",
-        "JBoss": "/opt/jboss/",
-        "Splunk": "/opt/splunk/",
-    }
-
+    """Detect the server type based on the presence of directories in /opt."""
+    channel.send('cd /opt\n')
+    time.sleep(1)
+    channel.send('ls\n')
+    time.sleep(1)
+    
+    server_types = ["springboot", "jboss", "splunk"]
+    
     detected_type = "Regular"  # Default to regular
 
-    for server_name, path in server_paths.items():
-        command = f"if [ -d '{path}' ]; then echo {server_name}; fi"
-        channel.send(command + '\n')
-        time.sleep(1)
-        if channel.recv_ready():
-            output = channel.recv(1024).decode('utf-8').strip()
-            if output == server_name:
-                detected_type = server_name
+    if channel.recv_ready():
+        output = channel.recv(1024).decode('utf-8').strip().splitlines()
+        for line in output:
+            for server_type in server_types:
+                if server_type in line:
+                    detected_type = server_type.capitalize()
+                    break
+            if detected_type != "Regular":
                 break
-
+    
     return detected_type
 
 def ssh_to_server():
@@ -71,7 +71,7 @@ def ssh_to_server():
         output = channel.recv(1024).decode('utf-8')
         print(output)
 
-    # Detect server type based on directory structure
+    # Detect server type based on directories in /opt
     server_type = detect_server_type(channel)
     print(f"Server Type Detected: {server_type}")
 
