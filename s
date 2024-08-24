@@ -1,27 +1,8 @@
 import paramiko
 import time
-import readline
 import getpass
-import glob
-
-# Common shell commands to be suggested
-SHELL_COMMANDS = ['cd', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'cat', 'echo', 'sudo', 'exit']
-
-def complete_path_and_commands(text, state):
-    """Enhanced tab completion for paths and shell commands."""
-    line = readline.get_line_buffer().split()
-
-    if not line or len(line) == 1:
-        # If it's the first word, complete from shell commands or file paths
-        matches = [cmd for cmd in SHELL_COMMANDS if cmd.startswith(text)] + glob.glob(text + '*')
-    else:
-        # If it's not the first word, complete from file paths only
-        matches = glob.glob(text + '*')
-    
-    try:
-        return matches[state]
-    except IndexError:
-        return None
+import subprocess
+import os
 
 def detect_server_type(channel):
     """Detect the server type based on the presence of directories in /opt."""
@@ -78,33 +59,103 @@ def ssh_to_server():
         server_type = detect_server_type(channel)
         print(f"Server Type Detected: {server_type}")
 
-        # Set up tab-completion
-        readline.set_completer(complete_path_and_commands)
-        readline.parse_and_bind("tab: complete")
-
-        # Interactive loop to keep the session open
-        while True:
-            try:
-                # Input with tab-completion for file paths and commands
-                command = input("Enter command (type 'exit' to close): ")
-            except KeyboardInterrupt:
-                continue  # Handle Ctrl+C
-            except EOFError:
-                break  # Handle Ctrl+D
-
-            if command.lower() == "exit":
-                break
-
-            channel.send(command + '\n')
-            time.sleep(1)  # Wait for the command to execute
-
-            while channel.recv_ready():
-                output = channel.recv(1024).decode('utf-8')
-                print(output)
-
-        # Close the connection
+        # Now switch to the command prompt for further interaction
+        # Constructing the plink command for cmd.exe
+        plink_command = f'plink.exe -ssh {username}@{host} -pw {password} -t "sudo su"'
+        
+        # Close the SSH session in Python
         channel.close()
         ssh.close()
+
+        # Start a new cmd.exe window with the plink command
+        subprocess.call(['cmd.exe', '/c', plink_command])
+
+    except Exception as e:
+        print(f"Failed to connect: {e}")
+
+# Run the function
+if __name__ == "__main__":
+    ssh_to_server()
+
+
+
+
+
+=================
+
+
+
+import paramiko
+import time
+import subprocess
+
+# Hard-coded username and password
+USERNAME = "your_username"  # Replace with your SSH username
+PASSWORD = "your_password"  # Replace with your SSH password
+
+def detect_server_type(channel):
+    """Detect the server type based on the presence of directories in /opt."""
+    channel.send('cd /opt\n')
+    time.sleep(1)
+    channel.send('ls\n')
+    time.sleep(1)
+    
+    server_types = ["springboot", "jboss", "splunk"]
+    
+    detected_type = "Regular"  # Default to regular
+
+    if channel.recv_ready():
+        output = channel.recv(1024).decode('utf-8').strip().splitlines()
+        for line in output:
+            for server_type in server_types:
+                if server_type in line:
+                    detected_type = server_type.capitalize()
+                    break
+            if detected_type != "Regular":
+                break
+    
+    return detected_type
+
+def ssh_to_server():
+    # Prompt user for server IP address only
+    host = input("Enter the server IP address: ")
+
+    # Initialize the SSH client
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+    try:
+        # Connect to the server
+        ssh.connect(host, username=USERNAME, password=PASSWORD)
+
+        # Open an interactive shell session
+        channel = ssh.invoke_shell()
+
+        # Execute the sudo su command
+        channel.send('sudo su\n')
+        time.sleep(1)
+        channel.send(PASSWORD + '\n')
+        time.sleep(1)  # Give it some time to switch users
+
+        # Read the output of the commands
+        while channel.recv_ready():
+            output = channel.recv(1024).decode('utf-8')
+            print(output)
+
+        # Detect server type based on directories in /opt
+        server_type = detect_server_type(channel)
+        print(f"Server Type Detected: {server_type}")
+
+        # Now switch to the command prompt for further interaction
+        # Constructing the plink command for cmd.exe
+        plink_command = f'plink.exe -ssh {USERNAME}@{host} -pw {PASSWORD} -t "sudo su"'
+        
+        # Close the SSH session in Python
+        channel.close()
+        ssh.close()
+
+        # Start a new cmd.exe window with the plink command
+        subprocess.call(['cmd.exe', '/c', plink_command])
 
     except Exception as e:
         print(f"Failed to connect: {e}")
