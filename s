@@ -1,76 +1,63 @@
-import com.jcraft.jsch.Channel;
-import com.jcraft.jsch.ChannelExec;
-import com.jcraft.jsch.JSch;
-import com.jcraft.jsch.Session;
-
-import java.io.InputStream;
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
 import java.io.OutputStream;
 import java.util.Scanner;
 
-public class SSHExample {
+public class SSHViaCmd {
 
     public static void main(String[] args) {
+        String plinkPath = "C:\\path\\to\\plink.exe"; // Replace with your actual plink.exe path
         String host = "your_vm_ip";
         String user = "your_username";
         String password = "your_password";
-        int port = 22;
 
         try {
-            JSch jsch = new JSch();
-            Session session = jsch.getSession(user, host, port);
-            session.setPassword(password);
-            
-            // Disable host key checking if needed
-            session.setConfig("StrictHostKeyChecking", "no");
+            // Initial command to SSH into the VM
+            String[] command = {plinkPath, "-ssh", user + "@" + host, "-pw", password};
 
-            session.connect();
+            ProcessBuilder processBuilder = new ProcessBuilder(command);
+            Process process = processBuilder.start();
 
-            Channel channel = session.openChannel("exec");
-            ((ChannelExec) channel).setCommand("sudo su");
-            channel.setInputStream(null);
+            // Set up streams for communication with the process
+            OutputStream outputStream = process.getOutputStream();
+            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
+            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
 
-            OutputStream out = channel.getOutputStream();
-            InputStream in = channel.getInputStream();
-
-            channel.connect();
+            // Executing `sudo su`
+            outputStream.write("sudo su\n".getBytes());
+            outputStream.flush();
 
             // Sending the password for sudo
-            out.write((password + "\n").getBytes());
-            out.flush();
+            outputStream.write((password + "\n").getBytes());
+            outputStream.flush();
 
-            // Reading and displaying output
-            byte[] tmp = new byte[1024];
-            while (true) {
-                while (in.available() > 0) {
-                    int i = in.read(tmp, 0, 1024);
-                    if (i < 0) break;
-                    System.out.print(new String(tmp, 0, i));
-                }
-                if (channel.isClosed()) {
-                    if (in.available() > 0) continue;
-                    System.out.println("exit-status: " + channel.getExitStatus());
-                    break;
-                }
+            // Reading and displaying output from the process
+            String line;
+            while ((line = reader.readLine()) != null || (line = errorReader.readLine()) != null) {
+                System.out.println(line);
             }
 
-            // Keep the session alive for further commands
+            // Keeping the session alive for further commands
             Scanner scanner = new Scanner(System.in);
             while (true) {
                 System.out.print("Enter command: ");
-                String command = scanner.nextLine();
-                if ("exit".equals(command)) break;
+                String commandInput = scanner.nextLine();
+                if ("exit".equals(commandInput)) break;
 
-                ((ChannelExec) channel).setCommand(command);
-                channel.connect();
-                while (in.available() > 0) {
-                    int i = in.read(tmp, 0, 1024);
-                    if (i < 0) break;
-                    System.out.print(new String(tmp, 0, i));
+                outputStream.write((commandInput + "\n").getBytes());
+                outputStream.flush();
+
+                // Reading and displaying output from the process
+                while ((line = reader.readLine()) != null) {
+                    System.out.println(line);
                 }
             }
 
-            channel.disconnect();
-            session.disconnect();
+            // Clean up
+            process.destroy();
+            reader.close();
+            errorReader.close();
+            outputStream.close();
         } catch (Exception e) {
             e.printStackTrace();
         }
