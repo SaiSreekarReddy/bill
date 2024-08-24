@@ -1,6 +1,9 @@
 @echo off
 setlocal
 
+:: Set UTF-8 encoding if needed
+chcp 65001 >nul
+
 :: Hard-coded username and password
 set USERNAME=your_username
 set PASSWORD=your_password
@@ -8,28 +11,15 @@ set PASSWORD=your_password
 :: Prompt for the server IP address
 set /p SERVER_IP=Enter the server IP address: 
 
-:: Define the plink path
-set PLINK_PATH=plink.exe
+:: PowerShell command to detect server type
+powershell -NoProfile -Command ^
+    "$OutputEncoding = [System.Text.Encoding]::UTF8; " ^
+    "$ServerType = 'Regular'; " ^
+    "$output = plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t 'sudo su -c \"cd /opt && ls\"'; " ^
+    "if ($output -match 'springboot') {$ServerType = 'Spring Boot'} " ^
+    "elseif ($output -match 'jboss') {$ServerType = 'JBoss'} " ^
+    "elseif ($output -match 'splunk') {$ServerType = 'Splunk'}; " ^
+    "echo Server Type Detected: $ServerType; " ^
+    "plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t 'export TERM=xterm; sudo su'"
 
-:: Function to detect server type
-:DetectServerType
-echo Detecting server type on %SERVER_IP%...
-%PLINK_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "sudo su -c \"cd /opt && ls\"" > temp.txt
-
-set SERVER_TYPE=Regular
-
-:: Check for presence of specific directories
-findstr /i "springboot" temp.txt >nul && set SERVER_TYPE=Spring Boot
-findstr /i "jboss" temp.txt >nul && set SERVER_TYPE=JBoss
-findstr /i "splunk" temp.txt >nul && set SERVER_TYPE=Splunk
-
-:: Report detected server type
-echo Server Type Detected: %SERVER_TYPE%
-del temp.txt
-goto :EndDetect
-
-:EndDetect
-:: Now start an interactive session using plink
-echo Starting interactive session...
-%PLINK_PATH% -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "sudo su"
 endlocal
