@@ -66,10 +66,11 @@ public class SSHSwingTerminal {
             OutputStream out = channel.getOutputStream();
             channel.connect();
 
-            // Handle the sudo su command and password prompt once
+            // Handle the sudo su command and password prompt
             new Thread(() -> {
                 try (Scanner scanner = new Scanner(in)) {
                     boolean sudoSent = false;
+                    boolean passwordSent = false;
                     while (scanner.hasNextLine()) {
                         String output = scanner.nextLine();
 
@@ -80,14 +81,15 @@ public class SSHSwingTerminal {
                         terminalArea.append(output + "\n");
                         terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
 
-                        // Handle sudo and password prompt only once
-                        if (!sudoSent && output.contains("$")) {  // Replace with appropriate prompt indicator if necessary
+                        // Detect the shell prompt and send sudo su
+                        if (!sudoSent && output.trim().endsWith("$")) {  // Assuming $ is the shell prompt
                             out.write(("sudo su\n").getBytes());
                             out.flush();
                             sudoSent = true;
-                        } else if (output.contains("[sudo] password")) {
+                        } else if (sudoSent && !passwordSent && output.contains("[sudo] password")) {
                             out.write((password + "\n").getBytes());
                             out.flush();
+                            passwordSent = true;
                         }
                     }
                 } catch (Exception e) {
