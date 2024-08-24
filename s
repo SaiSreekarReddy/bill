@@ -1,169 +1,164 @@
 import com.jcraft.jsch.*;
 import javax.swing.*;
 import java.awt.*;
-import java.io.InputStream;
-import java.io.OutputStream;
-import java.util.Scanner;
+import java.awt.event.*;
+import java.io.*;
 
 public class SSHSwingTerminal {
 
     public static void main(String[] args) {
-        // Hardcoded username and password
-        String username = "your_username";
-        String password = "your_password";
+        SwingUtilities.invokeLater(() -> new SSHSwingTerminal().start());
+    }
 
-        // Create and set up the window.
+    private void start() {
+        // Prompt for SSH credentials
+        String username = promptForInput("Enter SSH Username:", "Username");
+        if (username == null) return;
+
+        String password = promptForPassword("Enter SSH Password:", "Password");
+        if (password == null) return;
+
+        String host = promptForInput("Enter SSH Host (IP Address):", "Host");
+        if (host == null) return;
+
+        // Setup GUI
         JFrame frame = new JFrame("SSH Terminal");
         frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(800, 600);  // Larger size for better interaction
+        frame.setSize(800, 600);
 
-        // Create a text area for the terminal output
         JTextArea terminalArea = new JTextArea();
-        terminalArea.setFont(new Font("Monospaced", Font.PLAIN, 14));  // Use monospaced font for terminal look
+        terminalArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
         terminalArea.setEditable(false);
-        terminalArea.setLineWrap(false);  // Disable line wrapping for terminal-like behavior
-        terminalArea.setWrapStyleWord(false);
+        terminalArea.setBackground(Color.BLACK);
+        terminalArea.setForeground(Color.WHITE);
+        terminalArea.setCaretColor(Color.WHITE);
+
         JScrollPane scrollPane = new JScrollPane(terminalArea);
-
-        // Create a text field for command input
-        JTextField commandField = new JTextField();
-        commandField.setFont(new Font("Monospaced", Font.PLAIN, 14));  // Match font for consistency
-
-        // Create a panel to hold components
-        JPanel panel = new JPanel(new BorderLayout());
-        frame.add(panel);
-
-        panel.add(scrollPane, BorderLayout.CENTER);
-        panel.add(commandField, BorderLayout.SOUTH);
-
-        // Display the window.
+        frame.add(scrollPane, BorderLayout.CENTER);
         frame.setVisible(true);
 
-        // Prompt the user for the IP address
-        String host = JOptionPane.showInputDialog(null, "Enter the IP address of the server:", "Server IP", JOptionPane.PLAIN_MESSAGE);
+        // Initialize SSH connection in a separate thread
+        new Thread(() -> initializeSSHSession(username, password, host, terminalArea)).start();
+    }
 
-        if (host == null || host.trim().isEmpty()) {
-            JOptionPane.showMessageDialog(panel, "No IP address provided. Exiting.", "Error", JOptionPane.ERROR_MESSAGE);
-            System.exit(1);
-        }
-
+    private void initializeSSHSession(String username, String password, String host, JTextArea terminalArea) {
         try {
-            // Set up JSch and session
             JSch jsch = new JSch();
             Session session = jsch.getSession(username, host, 22);
             session.setPassword(password);
 
-            // Avoid asking for key confirmation
+            // Disable host key checking for simplicity
             session.setConfig("StrictHostKeyChecking", "no");
-
-            // Connect to the server
+            terminalArea.append("Connecting to " + host + "...\n");
             session.connect();
+            terminalArea.append("Connected to " + host + ".\n");
 
-            // Open a channel for executing commands
             ChannelShell channel = (ChannelShell) session.openChannel("shell");
-            channel.setPty(true);  // Enable pseudo-terminal (PTY) for proper terminal emulation
-            InputStream in = channel.getInputStream();
-            OutputStream out = channel.getOutputStream();
+            PipedInputStream pipedIn = new PipedInputStream();
+            PipedOutputStream pipedOut = new PipedOutputStream(pipedIn);
+
+            channel.setInputStream(pipedIn);
+            InputStream channelOut = channel.getInputStream();
+
             channel.connect();
 
-            // Handle the sudo su command and password prompt
-            new Thread(() -> {
-                try (Scanner scanner = new Scanner(in)) {
-                    boolean sudoSent = false;
-                    boolean passwordSent = false;
-                    while (scanner.hasNextLine()) {
-                        String output = scanner.nextLine();
+            // Set up key listener for terminal input
+            setupTerminalInput(terminalArea, pipedOut);
 
-                        // Filter out unwanted characters and control sequences
-                        output = filterOutput(output);
+            // Read output from the SSH channel and display in terminal area
+            readChannelOutput(channelOut, terminalArea);
 
-                        // Append each line to the terminal area
-                        terminalArea.append(output + "\n");
-                        terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
+            // Close resources when done
+            channel.disconnect();
+            session.disconnect();
+            terminalArea.append("\nDisconnected from " + host + ".\n");
+        } catch (Exception e) {
+            e.printStackTrace();
+            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Connection Error", JOptionPane.ERROR_MESSAGE));
+        }
+    }
 
-                        // Detect the shell prompt and send sudo su
-                        if (!sudoSent && output.trim().endsWith("$")) {  // Assuming $ is the shell prompt
-                            out.write(("sudo su\n").getBytes());
-                            out.flush();
-                            sudoSent = true;
-                        } else if (sudoSent && !passwordSent && output.contains("[sudo] password")) {
-                            out.write((password + "\n").getBytes());
-                            out.flush();
-                            passwordSent = true;
-                        }
-                    }
-                } catch (Exception e) {
-                    e.printStackTrace();
-                }
-            }).start();
-
-            // Add an action listener to send commands when the user presses Enter
-            commandField.addActionListener(e -> {
+    private void setupTerminalInput(JTextArea terminalArea, OutputStream out) {
+        terminalArea.addKeyListener(new KeyAdapter() {
+            @Override
+            public void keyTyped(KeyEvent e) {
                 try {
-                    String command = commandField.getText() + "\n";
-                    out.write(command.getBytes());
+                    char c = e.getKeyChar();
+                    out.write(c);
                     out.flush();
-                    commandField.setText("");
-                } catch (Exception ex) {
+                } catch (IOException ex) {
                     ex.printStackTrace();
                 }
-            });
+            }
 
-            // Add a key listener to handle special keys like Backspace, Tab, Arrow keys, etc.
-            commandField.addKeyListener(new java.awt.event.KeyAdapter() {
-                public void keyPressed(java.awt.event.KeyEvent evt) {
-                    try {
-                        int keyCode = evt.getKeyCode();
-                        String command = null;
-
-                        switch (keyCode) {
-                            case java.awt.event.KeyEvent.VK_TAB:
-                                command = "\t";  // Send Tab
-                                break;
-                            case java.awt.event.KeyEvent.VK_UP:
-                                command = "\033[A";  // Send Up Arrow
-                                break;
-                            case java.awt.event.KeyEvent.VK_DOWN:
-                                command = "\033[B";  // Send Down Arrow
-                                break;
-                            case java.awt.event.KeyEvent.VK_LEFT:
-                                command = "\033[D";  // Send Left Arrow
-                                break;
-                            case java.awt.event.KeyEvent.VK_RIGHT:
-                                command = "\033[C";  // Send Right Arrow
-                                break;
-                            case java.awt.event.KeyEvent.VK_BACK_SPACE:
-                                command = "\b";  // Send Backspace
-                                break;
-                            default:
-                                break;
-                        }
-
-                        if (command != null) {
-                            out.write(command.getBytes());
-                            out.flush();
-                            evt.consume();  // Prevent further processing of this event
-                        }
-                    } catch (Exception ex) {
-                        ex.printStackTrace();
+            @Override
+            public void keyPressed(KeyEvent e) {
+                try {
+                    int code = e.getKeyCode();
+                    switch (code) {
+                        case KeyEvent.VK_BACK_SPACE:
+                            out.write(0x7F); // DEL character
+                            break;
+                        case KeyEvent.VK_ENTER:
+                            out.write('\n');
+                            break;
+                        case KeyEvent.VK_TAB:
+                            out.write('\t');
+                            break;
+                        case KeyEvent.VK_UP:
+                            out.write("\033[A".getBytes());
+                            break;
+                        case KeyEvent.VK_DOWN:
+                            out.write("\033[B".getBytes());
+                            break;
+                        case KeyEvent.VK_LEFT:
+                            out.write("\033[D".getBytes());
+                            break;
+                        case KeyEvent.VK_RIGHT:
+                            out.write("\033[C".getBytes());
+                            break;
+                        default:
+                            // For other control keys, ignore or handle as needed
+                            break;
                     }
+                    out.flush();
+                    e.consume();
+                } catch (IOException ex) {
+                    ex.printStackTrace();
                 }
-            });
+            }
+        });
 
-        } catch (Exception e) {
+        // Request focus on the terminal area to capture input
+        SwingUtilities.invokeLater(terminalArea::requestFocusInWindow);
+    }
+
+    private void readChannelOutput(InputStream in, JTextArea terminalArea) {
+        try {
+            byte[] buffer = new byte[1024];
+            int read;
+            while ((read = in.read(buffer)) != -1) {
+                String output = new String(buffer, 0, read);
+                SwingUtilities.invokeLater(() -> {
+                    terminalArea.append(output);
+                    terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
+                });
+            }
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
 
-    // Method to filter out unwanted control characters and sequences
-    private static String filterOutput(String output) {
-        // Remove ANSI escape sequences
-        output = output.replaceAll("\\e\\[[\\d;]*[^\\d;]", "");
-        output = output.replaceAll("\\]\\d+;", "");  // Handle ]0; sequences
+    private String promptForInput(String message, String title) {
+        return SwingUtilities.invokeAndWait(() -> JOptionPane.showInputDialog(null, message, title, JOptionPane.PLAIN_MESSAGE));
+    }
 
-        // Remove other common non-printable control characters
-        output = output.replaceAll("[\\u0000-\\u001F\\u007F]+", "");
-
-        return output;
+    private String promptForPassword(String message, String title) {
+        JPasswordField passwordField = new JPasswordField();
+        int option = JOptionPane.showConfirmDialog(null, passwordField, title, JOptionPane.OK_CANCEL_OPTION, JOptionPane.PLAIN_MESSAGE);
+        if (option == JOptionPane.OK_OPTION) {
+            return new String(passwordField.getPassword());
+        }
+        return null;
     }
 }
