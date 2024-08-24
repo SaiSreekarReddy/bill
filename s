@@ -6,12 +6,19 @@ set USERNAME=your_username
 set PASSWORD=your_password
 set SERVER_IP=your_server_ip
 
-:: Detect the server type by searching for specific words in /opt
+:: Detect the server type by searching for specific words in /opt and elevate to root
 plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t ^
-"cd /opt && if ls | grep -q 'jboss'; then echo 'Server Type: JBoss'; " ^
-"elif ls | grep -q 'springboot'; then echo 'Server Type: Spring Boot'; " ^
-"elif ls | grep -q 'splunk'; then echo 'Server Type: Splunk'; " ^
-"else echo 'Server Type: Regular'; fi; " ^
-"echo %PASSWORD% | sudo -S su - && exec bash"
+"bash -c \"cd /opt; " ^
+"for dir in *; do " ^
+"if [ -d \"$dir\" ]; then " ^
+"  case $dir in " ^
+"    *jboss* ) echo 'Server Type: JBoss';; " ^
+"    *springboot* ) echo 'Server Type: Spring Boot';; " ^
+"    *splunk* ) echo 'Server Type: Splunk';; " ^
+"    * ) echo 'Server Type: Regular';; " ^
+"  esac; " ^
+"fi; " ^
+"done; " ^
+"echo %PASSWORD% | sudo -S su - && exec bash\""
 
 endlocal
