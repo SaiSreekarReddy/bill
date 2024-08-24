@@ -1,66 +1,47 @@
-import java.io.BufferedReader;
-import java.io.IOException;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.util.Scanner;
+import paramiko
+import time
 
-public class SSHViaCmdWithFiltering {
+def ssh_to_server():
+    host = "your_vm_ip"  # Replace with your server's IP
+    username = "your_username"  # Replace with your SSH username
+    password = "your_password"  # Replace with your SSH password
 
-    public static void main(String[] args) {
-        String plinkPath = "C:\\path\\to\\plink.exe"; // Replace with your actual plink.exe path
-        String host = "your_vm_ip";
-        String user = "your_username";
-        String password = "your_password";
+    # Initialize the SSH client
+    ssh = paramiko.SSHClient()
+    ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+    
+    # Connect to the server
+    ssh.connect(host, username=username, password=password)
 
-        try {
-            // Command to open a new command prompt and run plink with SSH
-            String[] command = {"cmd.exe", "/c", "start", "cmd.exe", "/K", plinkPath + " -ssh " + user + "@" + host + " -pw " + password};
+    # Open an interactive shell session
+    channel = ssh.invoke_shell()
 
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            Process process = processBuilder.start();
+    # Execute the sudo su command
+    channel.send('sudo su\n')
+    time.sleep(1)
+    channel.send(password + '\n')
+    time.sleep(1)  # Give it some time to switch users
 
-            // Set up streams for communication with the process
-            OutputStream outputStream = process.getOutputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
+    # Read the output of the commands
+    while channel.recv_ready():
+        output = channel.recv(1024).decode('utf-8')
+        print(output)
 
-            // Reading and filtering output from the process
-            String line;
-            while ((line = reader.readLine()) != null || (line = errorReader.readLine()) != null) {
-                String filteredLine = filterOutput(line);
-                System.out.println(filteredLine);
-            }
+    # Interactive loop to keep the session open
+    while True:
+        command = input("Enter command (type 'exit' to close): ")
+        if command.lower() == "exit":
+            break
+        channel.send(command + '\n')
+        time.sleep(1)  # Wait for the command to execute
 
-            // Keeping the session alive for further commands
-            Scanner scanner = new Scanner(System.in);
-            while (true) {
-                System.out.print("Enter command: ");
-                String commandInput = scanner.nextLine();
-                if ("exit".equals(commandInput)) break;
+        while channel.recv_ready():
+            output = channel.recv(1024).decode('utf-8')
+            print(output)
 
-                outputStream.write((commandInput + "\n").getBytes());
-                outputStream.flush();
+    # Close the connection
+    channel.close()
+    ssh.close()
 
-                // Reading and displaying output from the process
-                while ((line = reader.readLine()) != null) {
-                    String filteredLine = filterOutput(line);
-                    System.out.println(filteredLine);
-                }
-            }
-
-            // Clean up
-            process.destroy();
-            reader.close();
-            errorReader.close();
-            outputStream.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-    }
-
-    // Method to filter out non-printable characters and escape sequences
-    private static String filterOutput(String input) {
-        // Remove non-printable characters and escape sequences
-        return input.replaceAll("\\p{Cntrl}", "").replaceAll("\\[\\d*\\w", "").replace("]0", "").trim();
-    }
-}
+# Run the function
+ssh_to_server()
