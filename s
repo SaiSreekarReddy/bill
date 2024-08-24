@@ -3,17 +3,17 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.*;
 
-public class SSHSwingTerminal {
+public class SimpleSSHClient {
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new SSHSwingTerminal().start());
+        SwingUtilities.invokeLater(() -> new SimpleSSHClient().start());
     }
 
     private void start() {
         // Hardcoded SSH credentials
         String username = "your_username";  // Replace with your SSH username
         String password = "your_password";  // Replace with your SSH password
-        String host = "your_host_ip";       // Replace with the target IP address
+        String host = "your_host_ip";       // Replace with your SSH host IP
 
         // Setup GUI
         JFrame frame = new JFrame("SSH Terminal");
@@ -112,7 +112,6 @@ public class SSHSwingTerminal {
                             out.write("\033[C".getBytes());
                             break;
                         default:
-                            // For other control keys, ignore or handle as needed
                             break;
                     }
                     out.flush();
@@ -123,7 +122,7 @@ public class SSHSwingTerminal {
             }
         });
 
-        // Request focus on the terminal area to capture input
+        // Focus the terminal area to capture input immediately
         SwingUtilities.invokeLater(terminalArea::requestFocusInWindow);
     }
 
