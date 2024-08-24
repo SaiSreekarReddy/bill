@@ -3,7 +3,6 @@ import javax.swing.*;
 import java.awt.*;
 import java.io.InputStream;
 import java.io.OutputStream;
-import java.util.regex.Pattern;
 import java.util.Scanner;
 
 public class SSHSwingTerminal {
@@ -63,18 +62,14 @@ public class SSHSwingTerminal {
             // Open a channel for executing commands
             ChannelShell channel = (ChannelShell) session.openChannel("shell");
             channel.setPty(true);  // Enable pseudo-terminal (PTY) for proper terminal emulation
-            channel.setOutputStream(System.out);
             InputStream in = channel.getInputStream();
             OutputStream out = channel.getOutputStream();
             channel.connect();
 
-            // Send the sudo su command
-            out.write(("sudo su\n").getBytes());
-            out.flush();
-
-            // Handle the sudo password prompt
+            // Handle the sudo su command and password prompt once
             new Thread(() -> {
                 try (Scanner scanner = new Scanner(in)) {
+                    boolean sudoSent = false;
                     while (scanner.hasNextLine()) {
                         String output = scanner.nextLine();
 
@@ -85,9 +80,12 @@ public class SSHSwingTerminal {
                         terminalArea.append(output + "\n");
                         terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
 
-                        // Check if the output contains the sudo password prompt
-                        if (output.contains("[sudo] password")) {
-                            // Send the password for sudo
+                        // Handle sudo and password prompt only once
+                        if (!sudoSent && output.contains("$")) {  // Replace with appropriate prompt indicator if necessary
+                            out.write(("sudo su\n").getBytes());
+                            out.flush();
+                            sudoSent = true;
+                        } else if (output.contains("[sudo] password")) {
                             out.write((password + "\n").getBytes());
                             out.flush();
                         }
@@ -109,7 +107,7 @@ public class SSHSwingTerminal {
                 }
             });
 
-            // Add a key listener to handle special keys like Tab, Arrow keys, etc.
+            // Add a key listener to handle special keys like Backspace, Tab, Arrow keys, etc.
             commandField.addKeyListener(new java.awt.event.KeyAdapter() {
                 public void keyPressed(java.awt.event.KeyEvent evt) {
                     try {
