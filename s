@@ -1,21 +1,15 @@
-# Define your credentials and server IP
-$Username = "your_username"
-$Password = "your_password"
-$ServerIP = "your_server_ip"
+@echo off
+setlocal
 
-# Construct the plink command
-$plinkCommand = "plink.exe -ssh $Username@$ServerIP -pw $Password -t 'sudo su'"
+:: Set your username, password, and server IP
+set USERNAME=your_username
+set PASSWORD=your_password
+set SERVER_IP=your_server_ip
 
-# Execute the plink command
-Invoke-Expression $plinkCommand
-====
-# Define your credentials and server IP
-$Username = "your_username"
-$Password = "your_password"
-$ServerIP = "your_server_ip"
+:: Call PowerShell to execute plink with the necessary commands
+powershell -NoProfile -Command ^
+    "$Password = '%PASSWORD%';" ^
+    "$PlinkCommand = 'plink.exe -ssh %USERNAME%@%SERVER_IP% -pw ' + $Password + ' -t ''echo ' + $Password + ' | sudo -S su''';" ^
+    "Invoke-Expression $PlinkCommand"
 
-# Build the plink command that will log in and elevate to root
-$plinkCommand = "plink.exe -ssh $Username@$ServerIP -pw $Password -t 'echo $Password | sudo -S su'"
-
-# Execute the plink command
-Invoke-Expression $plinkCommand
+endlocal
