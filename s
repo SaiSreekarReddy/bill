@@ -1,9 +1,6 @@
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
-import java.io.OutputStream;
-import java.util.Scanner;
+import java.io.IOException;
 
-public class SSHViaCmd {
+public class OpenCmdForSSH {
 
     public static void main(String[] args) {
         String plinkPath = "C:\\path\\to\\plink.exe"; // Replace with your actual plink.exe path
@@ -12,53 +9,13 @@ public class SSHViaCmd {
         String password = "your_password";
 
         try {
-            // Initial command to SSH into the VM
-            String[] command = {plinkPath, "-ssh", user + "@" + host, "-pw", password};
+            // Command to open a new command prompt and run plink with SSH
+            String command = String.format("cmd /c start cmd.exe /K \"%s -ssh %s@%s -pw %s\"", plinkPath, user, host, password);
 
-            ProcessBuilder processBuilder = new ProcessBuilder(command);
-            Process process = processBuilder.start();
+            // Execute the command to open the new command prompt window
+            Runtime.getRuntime().exec(command);
 
-            // Set up streams for communication with the process
-            OutputStream outputStream = process.getOutputStream();
-            BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-            BufferedReader errorReader = new BufferedReader(new InputStreamReader(process.getErrorStream()));
-
-            // Executing `sudo su`
-            outputStream.write("sudo su\n".getBytes());
-            outputStream.flush();
-
-            // Sending the password for sudo
-            outputStream.write((password + "\n").getBytes());
-            outputStream.flush();
-
-            // Reading and displaying output from the process
-            String line;
-            while ((line = reader.readLine()) != null || (line = errorReader.readLine()) != null) {
-                System.out.println(line);
-            }
-
-            // Keeping the session alive for further commands
-            Scanner scanner = new Scanner(System.in);
-            while (true) {
-                System.out.print("Enter command: ");
-                String commandInput = scanner.nextLine();
-                if ("exit".equals(commandInput)) break;
-
-                outputStream.write((commandInput + "\n").getBytes());
-                outputStream.flush();
-
-                // Reading and displaying output from the process
-                while ((line = reader.readLine()) != null) {
-                    System.out.println(line);
-                }
-            }
-
-            // Clean up
-            process.destroy();
-            reader.close();
-            errorReader.close();
-            outputStream.close();
-        } catch (Exception e) {
+        } catch (IOException e) {
             e.printStackTrace();
         }
     }
