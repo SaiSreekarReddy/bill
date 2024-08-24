@@ -4,6 +4,7 @@ import java.awt.*;
 import java.io.InputStream;
 import java.io.OutputStream;
 import java.util.regex.Pattern;
+import java.util.Scanner;
 
 public class SSHSwingTerminal {
 
@@ -21,8 +22,8 @@ public class SSHSwingTerminal {
         JTextArea terminalArea = new JTextArea();
         terminalArea.setFont(new Font("Monospaced", Font.PLAIN, 14));  // Use monospaced font for terminal look
         terminalArea.setEditable(false);
-        terminalArea.setLineWrap(true);  // Line wrap for better readability
-        terminalArea.setWrapStyleWord(true);
+        terminalArea.setLineWrap(false);  // Disable line wrapping for terminal-like behavior
+        terminalArea.setWrapStyleWord(false);
         JScrollPane scrollPane = new JScrollPane(terminalArea);
 
         // Create a text field for command input
@@ -73,16 +74,15 @@ public class SSHSwingTerminal {
 
             // Handle the sudo password prompt
             new Thread(() -> {
-                try {
-                    byte[] buffer = new byte[1024];
-                    int read;
-                    while ((read = in.read(buffer)) != -1) {
-                        String output = new String(buffer, 0, read);
+                try (Scanner scanner = new Scanner(in)) {
+                    while (scanner.hasNextLine()) {
+                        String output = scanner.nextLine();
 
                         // Filter out unwanted characters and control sequences
                         output = filterOutput(output);
 
-                        terminalArea.append(output);
+                        // Append each line to the terminal area
+                        terminalArea.append(output + "\n");
                         terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
 
                         // Check if the output contains the sudo password prompt
