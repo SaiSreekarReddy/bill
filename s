@@ -1,11 +1,25 @@
 import paramiko
 import time
 import os
+import glob
 import readline
 
+# Set of common shell commands
+SHELL_COMMANDS = ['cd', 'ls', 'mkdir', 'rm', 'cp', 'mv', 'cat', 'echo', 'sudo', 'exit']
+
 def complete_path(text, state):
-    """Tab completion for paths."""
-    return (glob.glob(text + '*') + [None])[state]
+    """Tab completion for paths and shell commands."""
+    if state == 0:
+        if text:
+            # Complete file path
+            self.matches = glob.glob(text + '*')
+        else:
+            # Complete shell command
+            self.matches = SHELL_COMMANDS[:]
+    try:
+        return self.matches[state]
+    except IndexError:
+        return None
 
 def detect_server_type(channel):
     """Detect the server type based on running processes."""
@@ -16,15 +30,20 @@ def detect_server_type(channel):
         "Regular": "None"
     }
 
+    detected_types = []
+    
     for server_name, keyword in server_types.items():
         channel.send(f"ps -ef | grep {keyword}\n")
         time.sleep(1)  # Wait for the command to execute
         if channel.recv_ready():
             output = channel.recv(1024).decode('utf-8')
-            if keyword in output:
-                return server_name
+            if output.count(keyword) > 1:
+                detected_types.append(server_name)
     
-    return "Regular"  # Default to regular if no specific server is detected
+    if detected_types:
+        return ', '.join(detected_types)
+    else:
+        return "Regular"  # Default to regular if no specific server is detected
 
 def ssh_to_server():
     host = "your_vm_ip"  # Replace with your server's IP
