@@ -11,15 +11,15 @@ set PASSWORD=your_password
 :: Prompt for the server IP address
 set /p SERVER_IP=Enter the server IP address: 
 
-:: PowerShell command to detect server type
+:: PowerShell command to detect server type and connect via plink
 powershell -NoProfile -Command ^
     "$OutputEncoding = [System.Text.Encoding]::UTF8; " ^
     "$ServerType = 'Regular'; " ^
-    "$output = plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t 'sudo su -c \"cd /opt && ls\"'; " ^
+    "$output = & plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t \"sudo su -c 'cd /opt && ls'\"; " ^
     "if ($output -match 'springboot') {$ServerType = 'Spring Boot'} " ^
     "elseif ($output -match 'jboss') {$ServerType = 'JBoss'} " ^
     "elseif ($output -match 'splunk') {$ServerType = 'Splunk'}; " ^
     "echo Server Type Detected: $ServerType; " ^
-    "plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t 'export TERM=xterm; sudo su'"
+    "& plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t \"export TERM=xterm; sudo su\""
 
 endlocal
