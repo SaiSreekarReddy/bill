@@ -1,1 +1,0 @@
-set json={expand: sdfiudhf{"self":"sdfdsdfsdf", "name":"chris tofer","id":"26",{self dhfhaufas}}}} & for /f "tokens=2 delims=:" %a in ('echo %json% ^| findstr /c:"\"name\":\""') do @set nameLine=%a & for /f "tokens=1 delims=,}" %a in ("%nameLine%") do @set name=%a & set name=%name:"=% & echo %name%
