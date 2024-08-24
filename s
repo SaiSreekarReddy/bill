@@ -1,143 +1,77 @@
-import com.jcraft.jsch.*;
-import javax.swing.*;
-import java.awt.*;
-import java.io.*;
+import com.jcraft.jsch.Channel;
+import com.jcraft.jsch.ChannelExec;
+import com.jcraft.jsch.JSch;
+import com.jcraft.jsch.Session;
 
-public class SimpleSSHClient {
+import java.io.InputStream;
+import java.io.OutputStream;
+import java.util.Scanner;
+
+public class SSHExample {
 
     public static void main(String[] args) {
-        SwingUtilities.invokeLater(() -> new SimpleSSHClient().start());
-    }
+        String host = "your_vm_ip";
+        String user = "your_username";
+        String password = "your_password";
+        int port = 22;
 
-    private void start() {
-        // Hardcoded SSH credentials
-        String username = "your_username";  // Replace with your SSH username
-        String password = "your_password";  // Replace with your SSH password
-        String host = "your_host_ip";       // Replace with your SSH host IP
-
-        // Setup GUI
-        JFrame frame = new JFrame("SSH Terminal");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(800, 600);
-
-        JTextArea terminalArea = new JTextArea();
-        terminalArea.setFont(new Font("Monospaced", Font.PLAIN, 14));
-        terminalArea.setEditable(false);
-        terminalArea.setBackground(Color.BLACK);
-        terminalArea.setForeground(Color.WHITE);
-        terminalArea.setCaretColor(Color.WHITE);
-
-        JScrollPane scrollPane = new JScrollPane(terminalArea);
-        frame.add(scrollPane, BorderLayout.CENTER);
-        frame.setVisible(true);
-
-        // Initialize SSH connection in a separate thread
-        new Thread(() -> initializeSSHSession(username, password, host, terminalArea)).start();
-    }
-
-    private void initializeSSHSession(String username, String password, String host, JTextArea terminalArea) {
         try {
             JSch jsch = new JSch();
-            Session session = jsch.getSession(username, host, 22);
+            Session session = jsch.getSession(user, host, port);
             session.setPassword(password);
-
-            // Disable host key checking for simplicity
+            
+            // Disable host key checking if needed
             session.setConfig("StrictHostKeyChecking", "no");
-            terminalArea.append("Connecting to " + host + "...\n");
+
             session.connect();
-            terminalArea.append("Connected to " + host + ".\n");
 
-            ChannelShell channel = (ChannelShell) session.openChannel("shell");
-            PipedInputStream pipedIn = new PipedInputStream();
-            PipedOutputStream pipedOut = new PipedOutputStream(pipedIn);
+            Channel channel = session.openChannel("exec");
+            ((ChannelExec) channel).setCommand("sudo su");
+            channel.setInputStream(null);
 
-            channel.setInputStream(pipedIn);
-            InputStream channelOut = channel.getInputStream();
+            OutputStream out = channel.getOutputStream();
+            InputStream in = channel.getInputStream();
 
             channel.connect();
 
-            // Set up key listener for terminal input
-            setupTerminalInput(terminalArea, pipedOut);
+            // Sending the password for sudo
+            out.write((password + "\n").getBytes());
+            out.flush();
 
-            // Read output from the SSH channel and display in terminal area
-            readChannelOutput(channelOut, terminalArea);
+            // Reading and displaying output
+            byte[] tmp = new byte[1024];
+            while (true) {
+                while (in.available() > 0) {
+                    int i = in.read(tmp, 0, 1024);
+                    if (i < 0) break;
+                    System.out.print(new String(tmp, 0, i));
+                }
+                if (channel.isClosed()) {
+                    if (in.available() > 0) continue;
+                    System.out.println("exit-status: " + channel.getExitStatus());
+                    break;
+                }
+            }
 
-            // Close resources when done
+            // Keep the session alive for further commands
+            Scanner scanner = new Scanner(System.in);
+            while (true) {
+                System.out.print("Enter command: ");
+                String command = scanner.nextLine();
+                if ("exit".equals(command)) break;
+
+                ((ChannelExec) channel).setCommand(command);
+                channel.connect();
+                while (in.available() > 0) {
+                    int i = in.read(tmp, 0, 1024);
+                    if (i < 0) break;
+                    System.out.print(new String(tmp, 0, i));
+                }
+            }
+
             channel.disconnect();
             session.disconnect();
-            terminalArea.append("\nDisconnected from " + host + ".\n");
         } catch (Exception e) {
-            e.printStackTrace();
-            SwingUtilities.invokeLater(() -> JOptionPane.showMessageDialog(null, "Error: " + e.getMessage(), "Connection Error", JOptionPane.ERROR_MESSAGE));
-        }
-    }
-
-    private void setupTerminalInput(JTextArea terminalArea, OutputStream out) {
-        terminalArea.addKeyListener(new KeyAdapter() {
-            @Override
-            public void keyTyped(KeyEvent e) {
-                try {
-                    char c = e.getKeyChar();
-                    out.write(c);
-                    out.flush();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-
-            @Override
-            public void keyPressed(KeyEvent e) {
-                try {
-                    int code = e.getKeyCode();
-                    switch (code) {
-                        case KeyEvent.VK_BACK_SPACE:
-                            out.write(0x7F); // DEL character
-                            break;
-                        case KeyEvent.VK_ENTER:
-                            out.write('\n');
-                            break;
-                        case KeyEvent.VK_TAB:
-                            out.write('\t');
-                            break;
-                        case KeyEvent.VK_UP:
-                            out.write("\033[A".getBytes());
-                            break;
-                        case KeyEvent.VK_DOWN:
-                            out.write("\033[B".getBytes());
-                            break;
-                        case KeyEvent.VK_LEFT:
-                            out.write("\033[D".getBytes());
-                            break;
-                        case KeyEvent.VK_RIGHT:
-                            out.write("\033[C".getBytes());
-                            break;
-                        default:
-                            break;
-                    }
-                    out.flush();
-                    e.consume();
-                } catch (IOException ex) {
-                    ex.printStackTrace();
-                }
-            }
-        });
-
-        // Focus the terminal area to capture input immediately
-        SwingUtilities.invokeLater(terminalArea::requestFocusInWindow);
-    }
-
-    private void readChannelOutput(InputStream in, JTextArea terminalArea) {
-        try {
-            byte[] buffer = new byte[1024];
-            int read;
-            while ((read = in.read(buffer)) != -1) {
-                String output = new String(buffer, 0, read);
-                SwingUtilities.invokeLater(() -> {
-                    terminalArea.append(output);
-                    terminalArea.setCaretPosition(terminalArea.getDocument().getLength());
-                });
-            }
-        } catch (IOException e) {
             e.printStackTrace();
         }
     }
