@@ -6,7 +6,12 @@ set USERNAME=your_username
 set PASSWORD=your_password
 set SERVER_IP=your_server_ip
 
-:: Run plink to SSH into the server and elevate to root
-plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "echo %PASSWORD% | sudo -S su"
+:: Detect the server type by checking for specific directories
+plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t ^
+"if [ -d /opt/jboss ]; then echo 'Server Type: JBoss'; " ^
+"elif [ -d /opt/springboot ]; then echo 'Server Type: Spring Boot'; " ^
+"elif [ -d /opt/splunk ]; then echo 'Server Type: Splunk'; " ^
+"else echo 'Server Type: Regular'; fi; " ^
+"echo %PASSWORD% | sudo -S su - && exec bash"
 
 endlocal
