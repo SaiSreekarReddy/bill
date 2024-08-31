@@ -1,1 +1,4 @@
-curl -u %USERNAME%:%PASSWORD% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"customfield_10006\":\"%EPIC_LINK%\"},\"update\":{\"comment\":[{\"add\":{\"body\":\"%COMMENT%\"}}]}}" %JIRA_URL%/rest/api/2/issue/%TICKET_ID%
+curl -u %USERNAME%:%PASSWORD% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"assignee\":{\"name\":\"%ASSIGNEE_USERNAME%\"}}}" %JIRA_URL%/rest/api/2/issue/%TICKET_ID%
+
+
+curl -u %USERNAME%:%PASSWORD% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"assignee\":{\"accountId\":\"%ASSIGNEE_ACCOUNT_ID%\"}}}" %JIRA_URL%/rest/api/2/issue/%TICKET_ID%
