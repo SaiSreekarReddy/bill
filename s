@@ -30,11 +30,22 @@ set /p SERVER_B="Enter the destination server IP: "
 set /p SERVER_B_DIR="Enter the destination directory path on %SERVER_B%: "
 set /p TARGET_DATE="Enter the target date for file filtering (YYYY-MM-DD): "
 
-REM Create the destination folder on SERVER_B if it doesn't exist
-plink -pw %PASSWORD% %USERNAME%@%SERVER_B% "mkdir -p %SERVER_B_DIR%" >nul 2>&1
-
 REM SSH command to find files modified on a specific date
 set FIND_CMD="find %SERVER_A_DIR% -type f -newermt %TARGET_DATE% ! -newermt %TARGET_DATE%T23:59:59"
+
+REM Retrieve and display the list of files before transferring
+echo Listing files that match the date criteria on %SERVER_A%...
+plink -pw %PASSWORD% %USERNAME%@%SERVER_A% %FIND_CMD%
+
+REM Ask the user for confirmation before proceeding
+set /p CONFIRM="Do you want to proceed with the file transfer? (y/n): "
+if /i "%CONFIRM%" neq "y" (
+    echo Transfer canceled. Returning to the source IP prompt.
+    goto TRANSFER_LOOP
+)
+
+REM Create the destination folder on SERVER_B if it doesn't exist
+plink -pw %PASSWORD% %USERNAME%@%SERVER_B% "mkdir -p %SERVER_B_DIR%" >nul 2>&1
 
 REM Retrieve and transfer files from SERVER_A to SERVER_B in one step
 echo Retrieving file list and transferring files...
