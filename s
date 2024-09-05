@@ -1,10 +1,43 @@
 @echo off
 setlocal
 
-REM Prompt for user ID and password (only once, same for both servers)
-set /p USERNAME="Enter your SSH user ID: "
-set /p PASSWORD="Enter your SSH password: "
+REM :::::::::::::BEGIN OF MASKED PASSWORD INPUT CODE:::::::::::::
+:HInput
+::Version 3.0      
+SetLocal DisableDelayedExpansion
+echo Enter your password below:
+Set "Line="
+Rem Save 0x08 character in BS variable
+For /F %%# In (
+'"Prompt;$H&For %%# in (1) Do Rem"'
+) Do Set "BS=%%#"
 
+:HILoop
+Set "Key="
+For /F "delims=" %%# In (
+'Xcopy /W "%~f0" "%~f0" 2^>Nul'
+) Do If Not Defined Key Set "Key=%%#"
+Set "Key=%Key:~-1%"
+SetLocal EnableDelayedExpansion
+If Not Defined Key Goto :HIEnd 
+If %BS%==^%Key% (Set /P "=%BS% %BS%" <Nul
+Set "Key="
+If Defined Line Set "Line=!Line:~0,-1!"
+) Else Set /P "=*" <Nul
+If Not Defined Line (EndLocal &Set "Line=%Key%"
+) Else For /F delims^=^ eol^= %%# In (
+"!Line!") Do EndLocal &Set "Line=%%#%Key%" 
+Goto :HILoop
+
+:HIEnd
+EndLocal & Set "PASSWORD=%Line%"
+Echo(
+REM :::::::::::::END OF MASKED PASSWORD INPUT CODE:::::::::::::
+
+REM Prompt for user ID (Password is already masked)
+set /p USERNAME="Enter your SSH user ID: "
+
+REM Use masked password for both SERVER_A and SERVER_B
 :TRANSFER_LOOP
 REM Prompt for source server IP
 set /p SERVER_A="Enter the source server IP (or type 'exit' to quit): "
