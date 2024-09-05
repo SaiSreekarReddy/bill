@@ -1,7 +1,7 @@
 @echo off
 setlocal
 
-REM Prompt for user ID and password (only once)
+REM Prompt for user ID and password (only once, same for both servers)
 set /p USERNAME="Enter your SSH user ID: "
 set /p PASSWORD="Enter your SSH password: "
 
@@ -60,20 +60,32 @@ if /i "%CONFIRM%" neq "y" (
 REM Create the destination folder on SERVER_B if it doesn't exist
 plink -pw %PASSWORD% %USERNAME%@%SERVER_B% "mkdir -p %SERVER_B_DIR%" >nul 2>&1
 
-REM Transfer each file from the list to SERVER_B
+REM Transfer each file from SERVER_A to local, upload it to SERVER_B, and delete from local
 for /f "usebackq delims=" %%A in (file_list.txt) do (
-    echo Transferring %%A from %SERVER_A% to %SERVER_B%...
-    pscp -pw %PASSWORD% %USERNAME%@%SERVER_A%%%A %USERNAME%@%SERVER_B%:%SERVER_B_DIR%
+    echo Downloading %%A from %SERVER_A% to local machine...
+    pscp -pw %PASSWORD% %USERNAME%@%SERVER_A%:"%%A" .\
+
     if %errorlevel% neq 0 (
-        echo Error transferring file %%A.
+        echo Error downloading file %%A.
         exit /b 1
     )
+
+    echo Uploading %%A from local machine to %SERVER_B%...
+    pscp -pw %PASSWORD% ".\%%~nxA" %USERNAME%@%SERVER_B%:%SERVER_B_DIR%
+
+    if %errorlevel% neq 0 (
+        echo Error uploading file %%A.
+        exit /b 1
+    )
+
+    echo Deleting local file %%A...
+    del "%%~nxA"
 )
 
 REM Cleanup temporary file
 del file_list.txt
 
-echo Files transferred successfully.
+echo Files transferred and cleaned up successfully.
 
 REM Loop back to allow another transfer from a different source IP
 goto TRANSFER_LOOP
