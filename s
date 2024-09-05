@@ -9,14 +9,11 @@ echo Enter your password below:
 Set "Line="
 Rem Save 0x08 character in BS variable
 For /F %%# In (
-'"Prompt;$H&For %%# in (1) Do Rem"'
-) Do Set "BS=%%#"
+'"Prompt;$H&For %%# in (1) Do Rem"') Do Set "BS=%%#"
 
 :HILoop
 Set "Key="
-For /F "delims=" %%# In (
-'Xcopy /W "%~f0" "%~f0" 2^>Nul'
-) Do If Not Defined Key Set "Key=%%#"
+For /F "delims=" %%# In ('Xcopy /W "%~f0" "%~f0" 2^>Nul') Do If Not Defined Key Set "Key=%%#"
 Set "Key=%Key:~-1%"
 SetLocal EnableDelayedExpansion
 If Not Defined Key Goto :HIEnd 
@@ -25,8 +22,7 @@ Set "Key="
 If Defined Line Set "Line=!Line:~0,-1!"
 ) Else Set /P "=*" <Nul
 If Not Defined Line (EndLocal &Set "Line=%Key%"
-) Else For /F delims^=^ eol^= %%# In (
-"!Line!") Do EndLocal &Set "Line=%%#%Key%" 
+) Else For /F delims^=^ eol^= %%# In ("!Line!") Do EndLocal &Set "Line=%%#%Key%" 
 Goto :HILoop
 
 :HIEnd
@@ -57,20 +53,32 @@ if %errorlevel% neq 0 (
 )
 echo SSH access validated for %SERVER_A%.
 
-REM Prompt for additional details (source and destination directories, date)
-set /p SERVER_A_DIR="Enter the source directory path on %SERVER_A%: "
+REM Ask for operation type
+echo Select the file transfer operation:
+echo 1. Move files from SERVER_A to SERVER_B
+echo 2. Download files from SERVER_A to local
+echo 3. Upload files from local to SERVER_B
+set /p OPERATION="Choose an option (1, 2, or 3): "
+
+if "%OPERATION%"=="1" goto :ServerToServer
+if "%OPERATION%"=="2" goto :ServerToLocal
+if "%OPERATION%"=="3" goto :LocalToServer
+echo Invalid option. Exiting...
+exit /b 1
+
+:ServerToServer
+REM Prompt for additional details
+set /p SERVER_A_DIR="Enter the source directory path on SERVER_A: "
 set /p SERVER_B="Enter the destination server IP: "
-set /p SERVER_B_DIR="Enter the destination directory path on %SERVER_B%: "
+set /p SERVER_B_DIR="Enter the destination directory path on SERVER_B: "
 set /p TARGET_DATE="Enter the target date for file filtering (YYYY-MM-DD): "
 
 REM SSH command to find files modified on a specific date
 set FIND_CMD="find %SERVER_A_DIR% -type f -newermt %TARGET_DATE% ! -newermt %TARGET_DATE%T23:59:59"
-
-REM Retrieve and store the list of files temporarily in memory for display
 echo Retrieving and displaying file list...
 plink -pw %PASSWORD% %USERNAME%@%SERVER_A% %FIND_CMD% > file_list.txt
 
-REM Check if the file_list.txt is empty (no files found)
+REM Check if file_list.txt is empty (no files found)
 for /f %%A in (file_list.txt) do set FILE_FOUND=1
 if not defined FILE_FOUND (
     echo No files found for the given date.
@@ -78,22 +86,7 @@ if not defined FILE_FOUND (
     goto TRANSFER_LOOP
 )
 
-REM Echo the list of files before starting the transfer
-echo The following files will be transferred:
-type file_list.txt
-
-REM Ask for confirmation before proceeding
-set /p CONFIRM="Do you want to proceed with the file transfer? (y/n): "
-if /i "%CONFIRM%" neq "y" (
-    echo Transfer canceled. Returning to the source IP prompt.
-    del file_list.txt
-    goto TRANSFER_LOOP
-)
-
-REM Create the destination folder on SERVER_B if it doesn't exist
-plink -pw %PASSWORD% %USERNAME%@%SERVER_B% "mkdir -p %SERVER_B_DIR%" >nul 2>&1
-
-REM Transfer each file from SERVER_A to local, upload it to SERVER_B, and delete from local
+REM Loop through each file and transfer
 for /f "usebackq delims=" %%A in (file_list.txt) do (
     echo Downloading %%A from %SERVER_A% to local machine...
     pscp -pw %PASSWORD% %USERNAME%@%SERVER_A%:"%%A" .\
@@ -114,13 +107,57 @@ for /f "usebackq delims=" %%A in (file_list.txt) do (
     echo Deleting local file %%A...
     del "%%~nxA"
 )
-
-REM Cleanup temporary file
 del file_list.txt
-
-echo Files transferred and cleaned up successfully.
-
-REM Loop back to allow another transfer from a different source IP
+echo Files transferred successfully.
 goto TRANSFER_LOOP
+
+:ServerToLocal
+set /p SERVER_A_DIR="Enter the source directory path on SERVER_A: "
+set /p TARGET_DATE="Enter the target date for file filtering (YYYY-MM-DD): "
+
+REM SSH command to find files modified on a specific date
+set FIND_CMD="find %SERVER_A_DIR% -type f -newermt %TARGET_DATE% ! -newermt %TARGET_DATE%T23:59:59"
+echo Retrieving and displaying file list...
+plink -pw %PASSWORD% %USERNAME%@%SERVER_A% %FIND_CMD% > file_list.txt
+
+REM Create local folder for downloaded files
+mkdir files_downloaded
+
+REM Download each file from SERVER_A to the local machine
+for /f "usebackq delims=" %%A in (file_list.txt) do (
+    echo Downloading %%A from %SERVER_A% to local machine...
+    pscp -pw %PASSWORD% %USERNAME%@%SERVER_A%:"%%A" ".\files_downloaded\"
+
+    if %errorlevel% neq 0 (
+        echo Error downloading file %%A.
+        exit /b 1
+    )
+)
+del file_list.txt
+echo Files downloaded to "files_downloaded" folder successfully.
+goto TRANSFER_LOOP
+
+:LocalToServer
+set /p SERVER_B="Enter the destination server IP: "
+set /p SERVER_B_DIR="Enter the destination directory path on SERVER_B: "
+
+:LocalToServerLoop
+set /p LOCAL_FILE="Enter the local file to upload (or type 'exit' to quit): "
+
+REM Exit the loop if the user types 'exit'
+if /i "%LOCAL_FILE%"=="exit" (
+    echo Exiting the upload loop.
+    goto TRANSFER_LOOP
+)
+
+REM Upload the file from local machine to SERVER_B
+pscp -pw %PASSWORD% "%LOCAL_FILE%" %USERNAME%@%SERVER_B%:%SERVER_B_DIR%
+
+if %errorlevel% neq 0 (
+    echo Error uploading file %LOCAL_FILE%.
+    exit /b 1
+)
+echo File %LOCAL_FILE% uploaded successfully.
+goto LocalToServerLoop
 
 endlocal
