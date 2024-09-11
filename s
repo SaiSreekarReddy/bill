@@ -6,27 +6,25 @@ set USERNAME=your_username
 set PASSWORD=your_password
 set SERVER_IP=your_server_ip
 
-:: Run plink to SSH into the server, detect the server type, find the app name, and keep the session open
-plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t ^
-"bash -c \"cd /opt; " ^
-"for dir in *; do " ^
-"if [ -d \"$dir\" ]; then " ^
-"  case $dir in " ^
-"    *jboss* ) echo 'Server Type: JBoss'; " ^
-"      if [ -d /opt/jboss/instance ]; then " ^
-"        app_name=\$(ls /opt/jboss/instance | head -n 1); " ^
-"        echo 'JBoss Application Name: '$app_name; " ^
-"      fi;; " ^
-"    *springboot* ) echo 'Server Type: Spring Boot'; " ^
-"      if [ -d /opt/springboot/applications ]; then " ^
-"        app_name=\$(ls /opt/springboot/applications | head -n 1); " ^
-"        echo 'Spring Boot Application Name: '$app_name; " ^
-"      fi;; " ^
-"    *splunk* ) echo 'Server Type: Splunk';; " ^
-"    * ) echo 'Server Type: Regular';; " ^
-"  esac; " ^
-"fi; " ^
-"done; " ^
-"bash\""
+:: Set the command to detect server type and application on the remote server
+set cmd2=if [ -d "/opt/jboss" ]; then echo jboss; elif [ -d "/opt/springboot" ]; then echo springboot; else echo regular; fi
+
+:: Run the command and capture the server type
+for /f "delims=" %%i in ('plink -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c ''%cmd2%''"') do set serverType=%%i
+
+:: Check if the server type is JBoss or Spring Boot and get the application name
+if "%serverType%" == "jboss" (
+    :: Run the command to get the JBoss application name
+    for /f "delims=" %%j in ('plink -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c ''ls /opt/jboss/instance | head -n 1''"') do set appName=%%j
+) else if "%serverType%" == "springboot" (
+    :: Run the command to get the Spring Boot application name
+    for /f "delims=" %%j in ('plink -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c ''ls /opt/springboot/applications | head -n 1''"') do set appName=%%j
+) else (
+    set appName=NoAppFound
+)
+
+:: Output the server type and application name
+echo Detected Server Type: %serverType%
+echo Detected Application Name: %appName%
 
 endlocal
