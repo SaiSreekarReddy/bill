@@ -12,22 +12,24 @@ set cmd2=if [ -d "/opt/jboss" ]; then echo jboss; elif [ -d "/opt/springboot" ];
 :: Run the command and capture the server type
 for /f "delims=" %%i in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c '%cmd2%'"') do set serverType=%%i
 
-:: Output the detected server type
+:: Debugging: Output detected server type
 echo Detected Server Type: %serverType%
 
 :: Application detection based on the server type
 if "%serverType%" == "jboss" (
-    :: Run the command to get the JBoss application name
+    echo Detected JBoss server, fetching application name...
     for /f "delims=" %%j in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c 'ls /opt/jboss/instance | head -n 1'"') do set appName=%%j
 ) else if "%serverType%" == "springboot" (
-    :: Run the command to get the Spring Boot application name
+    echo Detected Spring Boot server, fetching application name...
     for /f "delims=" %%j in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c 'ls /opt/springboot/applications | head -n 1'"') do set appName=%%j
 ) else (
+    echo No specific server detected, setting app name to NoAppFound...
     set appName=NoAppFound
 )
 
 :: Output the server type and application name
-echo Detected Server Type: %serverType%
-echo Detected Application Name: %appName%
+echo Final Detected Server Type: %serverType%
+echo Final Detected Application Name: %appName%
 
+pause
 endlocal
