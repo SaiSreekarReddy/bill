@@ -6,7 +6,7 @@ set USERNAME=your_username
 set PASSWORD=your_password
 set SERVER_IP=your_server_ip
 
-:: Run plink to SSH into the server, check for server type in /opt, detect application name, and elevate to root
+:: Run plink to SSH into the server, check for server type in /opt, detect application name, and keep session open
 plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t ^
 "bash -c \"cd /opt; " ^
 "for dir in *; do " ^
@@ -27,6 +27,6 @@ plink.exe -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t ^
 "  esac; " ^
 "fi; " ^
 "done; " ^
-"echo %PASSWORD% | sudo -S su - && exec bash\""
+"exec bash\""
 
 endlocal
