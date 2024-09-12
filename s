@@ -1,14 +1,12 @@
 #!/bin/bash
 
-# Email variables
-EMAIL="your_email@example.com"
-SUBJECT="Server Status Report"
-LOG_FILE="/tmp/server_status_report.txt"
+# Email or log report variables (save the log file in the Jenkins workspace)
+LOG_FILE="${WORKSPACE}/server_status_report.txt"
 
 # Clean the log file
 > $LOG_FILE
 
-# Read each line (IP address) from SERVER_IPS and process it
+# Loop through each IP address from SERVER_IPS
 while read -r SERVER_IP; do
     echo "Checking server $SERVER_IP..." >> $LOG_FILE
     USERNAME="your_username"
@@ -38,5 +36,14 @@ while read -r SERVER_IP; do
     echo "------------------------------" >> $LOG_FILE
 done <<< "$SERVER_IPS"
 
-# Send email
-mail -s "$SUBJECT" "$EMAIL" < $LOG_FILE
+# Display the log file content in the Jenkins console output
+cat $LOG_FILE
+
+# Optionally, exit with a non-zero status if any errors occurred to mark the build as failed
+if grep -q "inactive" $LOG_FILE; then
+    echo "One or more applications are inactive. Marking the build as failed."
+    exit 1  # Mark the build as failed if any application is down
+else
+    echo "All applications are running successfully."
+    exit 0  # Mark the build as successful
+fi
