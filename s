@@ -1,5 +1,5 @@
 @echo off
-setlocal enabledelayedexpansion
+setlocal
 
 :: Set your username, password, and server IP
 set USERNAME=your_username
@@ -19,32 +19,31 @@ echo Detected Server Type: %serverType%
 if "%serverType%" == "jboss" (
     echo Detected JBoss server, fetching application name...
     for /f "delims=" %%j in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c ''ls /opt/jboss/instance | head -n 1''"') do set appName=%%j
-    :: Debugging: Output raw application name for JBoss
-    echo Raw Application Name (JBoss): !appName!
-    :: Trim the name to exclude "_0000" or other suffix
-    for /f "tokens=1 delims=_" %%k in ("!appName!") do set appName=%%k
 ) else if "%serverType%" == "springboot" (
     echo Detected Spring Boot server, fetching application name...
     for /f "delims=" %%j in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c ''ls /opt/springboot/applications | head -n 1''"') do set appName=%%j
-    :: Debugging: Output raw application name for Spring Boot
-    echo Raw Application Name (Spring Boot): !appName!
-    :: Trim the name to exclude "-web" or other suffix
-    for /f "tokens=1 delims=-" %%k in ("!appName!") do set appName=%%k
 ) else (
     echo No specific server detected, setting app name to NoAppFound...
     set appName=NoAppFound
 )
 
-:: Debugging: Check if appName variable is still empty
-if "!appName!" == "" (
-    echo Application name could not be fetched.
-) else (
-    echo Final Detected Application Name: !appName!
+:: Debugging: Output raw application name
+echo Raw Application Name: %appName%
+
+:: Clean up application name based on known patterns
+if not "%appName%" == "" (
+    if "%serverType%" == "jboss" (
+        :: Remove the "_0000" suffix if it exists
+        set appName=%appName:_0000=%
+    ) else if "%serverType%" == "springboot" (
+        :: Remove the "-web" suffix if it exists
+        set appName=%appName:-web=%
+    )
 )
 
 :: Output the final server type and application name
 echo Final Detected Server Type: %serverType%
-echo Final Detected Application Name: !appName!
+echo Final Cleaned Application Name: %appName%
 
 pause
 endlocal
