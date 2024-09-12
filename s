@@ -41,16 +41,16 @@ for %%A in (%IP_LIST%) do (
     :: Output detected application name
     echo Application Name for !SERVER_IP!: !appName!
 
-    :: Check the status of the application
+    :: Check the status of the application and filter the result to capture only "active" or "inactive"
     if "!serverType!" == "jboss" (
         plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S /opt/jboss/bin/systemctl is-active !appName!'" > tmp_status.txt
-        set /p status=<tmp_status.txt
-        del tmp_status.txt
     ) else if "!serverType!" == "springboot" (
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S service !appName! status'" > tmp_status.txt
-        set /p status=<tmp_status.txt
-        del tmp_status.txt
+        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S service !appName! status | grep -E \"(active|inactive)\"'" > tmp_status.txt
     )
+
+    :: Read the filtered status from the file
+    set /p status=<tmp_status.txt
+    del tmp_status.txt
 
     :: Output application status
     echo Application Status for !SERVER_IP!: !status!
