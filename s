@@ -1,74 +1,54 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Prompt for username, password, application name, and number of hours to go back
+:: Prompt for server details
+set /p server=Enter the server IP: 
 set /p user=Enter your username: 
-set /p pass=Enter your password: 
-set /p app=Enter the application name (e.g., app1/app2/jsb1/jsb3): 
+set /p pass=Enter your password:
 set /p hours=Enter the number of hours to go back: 
 
-:: Determine which server to use based on app name
-if "%app%"=="app1" set server=192.168.0.1
-if "%app%"=="app3" set server=192.168.0.1
-if "%app%"=="app6" set server=192.168.0.1
+:: Get current date and time (assuming server and client are in sync, or adjust accordingly)
+for /f "tokens=*" %%i in ('plink -batch -pw %pass% %user%@%server% "date -u +%%Y%%m%%d%%H%%M"') do set currentTime=%%i
 
-if "%app%"=="app2" set server=192.168.0.2
-if "%app%"=="app4" set server=192.168.0.2
-if "%app%"=="app7" set server=192.168.0.2
-
-if "%app:~0,4%"=="jsb1" set server=192.168.0.3
-if "%app:~0,4%"=="jsb3" set server=192.168.0.3
-if "%app:~0,4%"=="jsb6" set server=192.168.0.3
-
-:: You can add more conditions for server4 or any other fallback
-if not defined server (
-    echo Application name does not match any predefined rules.
-    pause
-    exit /b
-)
-
-echo Selected server: %server%
-
-:: Define the application path template (based on app name)
-set path_template=/opt/jboss/instance/%app%/logs/
-
-:: Create a local folder for downloads (organized by application and server)
-set localPath=C:\DownloadedLogs\%app%\
-if not exist %localPath% mkdir %localPath%
-
-:: Get the time range for logs on the selected server (based on the number of hours entered)
+:: Get time going back the specified hours (using a basic date command)
 for /f "tokens=*" %%i in ('plink -batch -pw %pass% %user%@%server% "date -u --date='%hours% hours ago' +%%Y%%m%%d%%H%%M"') do set backTime=%%i
 
-:: Fetch log files modified within the time frame from the specific application path
-plink -batch -pw %pass% %user%@%server% "find %path_template% -type f -newermt '%backTime%'" > loglist.txt
+:: Define remote paths and local directory for download
+set remotePath=/var/log/
+set localPath=C:\DownloadedLogs\
 
-:: Loop through each file found and download it using PSCP
+:: Create local directory if it doesn't exist
+if not exist %localPath% (
+    mkdir %localPath%
+)
+
+:: Use Plink to find logs between current time and back time
+echo Fetching logs from %server% since %backTime%
+plink -batch -pw %pass% %user%@%server% "find %remotePath% -type f -newermt '!backTime!'" > loglist.txt
+
+:: Check if any logs were found
+if not exist loglist.txt (
+    echo No logs found or unable to fetch log list.
+    goto :end
+)
+
+:: Display all the files to be downloaded and ask for confirmation
+echo The following files have been found:
+type loglist.txt
+
+set /p confirm=Do you want to download these files? (y/n): 
+if /i not "%confirm%"=="y" (
+    echo Download aborted.
+    goto :end
+)
+
+:: Loop through each file and download using PSCP
 for /f "tokens=*" %%i in (loglist.txt) do (
-    echo Downloading %%i from server %server%...
+    echo Downloading: %%i
     pscp -pw %pass% %user%@%server%:"%%i" %localPath%
 )
 
-echo All logs downloaded successfully to %localPath%.
+echo Logs downloaded to %localPath%.
+
+:end
 pause
-
-
-
-==========
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
