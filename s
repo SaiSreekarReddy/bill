@@ -1,54 +1,64 @@
-@echo off
-setlocal enabledelayedexpansion
+#!/bin/bash
 
-:: Prompt for server details
-set /p server=Enter the server IP: 
-set /p user=Enter your username: 
-set /p pass=Enter your password:
-set /p hours=Enter the number of hours to go back: 
+# Jenkins provides SSH_USER and SSH_PASS from the credentials
+echo "Using credentials for SSH access..."
 
-:: Get current date and time (assuming server and client are in sync, or adjust accordingly)
-for /f "tokens=*" %%i in ('plink -batch -pw %pass% %user%@%server% "date -u +%%Y%%m%%d%%H%%M"') do set currentTime=%%i
+# Loop through each IP address from SERVER_IPS
+while read -r SERVER_IP; do
+    echo "Checking server $SERVER_IP..."
 
-:: Get time going back the specified hours (using a basic date command)
-for /f "tokens=*" %%i in ('plink -batch -pw %pass% %user%@%server% "date -u --date='%hours% hours ago' +%%Y%%m%%d%%H%%M"') do set backTime=%%i
+    # Detect the server type and application name
+    serverType=$(sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP "
+        if [ -d '/opt/jboss' ]; then 
+            echo jboss; 
+        elif [ -d '/opt/springboot' ]; then 
+            echo springboot; 
+        else 
+            echo no_type; 
+        fi
+    ")
 
-:: Define remote paths and local directory for download
-set remotePath=/var/log/
-set localPath=C:\DownloadedLogs\
+    # Log the detected server type
+    echo "Detected server type on $SERVER_IP: $serverType"
 
-:: Create local directory if it doesn't exist
-if not exist %localPath% (
-    mkdir %localPath%
-)
+    # Check if a valid server type was found
+    if [ "$serverType" == "no_type" ]; then
+        echo "No specific server detected on $SERVER_IP"
+        continue
+    fi
 
-:: Use Plink to find logs between current time and back time
-echo Fetching logs from %server% since %backTime%
-plink -batch -pw %pass% %user%@%server% "find %remotePath% -type f -newermt '!backTime!'" > loglist.txt
+    # Fetch application name based on server type
+    if [ "$serverType" == "jboss" ]; then
+        echo "Fetching application name from /opt/jboss/instance on $SERVER_IP"
+        appName=$(sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP "ls /opt/jboss/instance | head -n 1")
+        appName=${appName/_0000/}  # Remove "_0000" suffix for JBoss app names
+    elif [ "$serverType" == "springboot" ]; then
+        echo "Fetching application name from /opt/springboot/applications on $SERVER_IP"
+        appName=$(sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP "ls /opt/springboot/applications | head -n 1")
+        appName=${appName/-web/}  # Remove "-web" suffix for Spring Boot app names
+    fi
 
-:: Check if any logs were found
-if not exist loglist.txt (
-    echo No logs found or unable to fetch log list.
-    goto :end
-)
+    # Check if application name was found
+    if [ -z "$appName" ]; then
+        echo "No application name found on $SERVER_IP"
+        continue
+    fi
 
-:: Display all the files to be downloaded and ask for confirmation
-echo The following files have been found:
-type loglist.txt
+    # Check application status
+    echo "Detected $serverType server, application: $appName"
+    status=$(sshpass -p "$SSH_PASS" ssh -o StrictHostKeyChecking=no $SSH_USER@$SERVER_IP "systemctl status $appName | head -n 5")
+    
+    # Output the status directly to the Jenkins console
+    echo "Status on $SERVER_IP:"
+    echo "$status"
+    echo "------------------------------"
+done <<< "$SERVER_IPS"
 
-set /p confirm=Do you want to download these files? (y/n): 
-if /i not "%confirm%"=="y" (
-    echo Download aborted.
-    goto :end
-)
-
-:: Loop through each file and download using PSCP
-for /f "tokens=*" %%i in (loglist.txt) do (
-    echo Downloading: %%i
-    pscp -pw %pass% %user%@%server%:"%%i" %localPath%
-)
-
-echo Logs downloaded to %localPath%.
-
-:end
-pause
+# Optionally, exit with a non-zero status if any errors occurred to mark the build as failed
+if grep -q "inactive" <<< "$status"; then
+    echo "One or more applications are inactive. Marking the build as failed."
+    exit 1  # Mark the build as failed if any application is down
+else
+    echo "All applications are running successfully."
+    exit 0  # Mark the build as successful
+fi
