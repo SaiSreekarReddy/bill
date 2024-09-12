@@ -1,49 +1,74 @@
-#!/bin/bash
+@echo off
+setlocal enabledelayedexpansion
 
-# Email or log report variables (save the log file in the Jenkins workspace)
-LOG_FILE="${WORKSPACE}/server_status_report.txt"
+:: Prompt for username, password, application name, and number of hours to go back
+set /p user=Enter your username: 
+set /p pass=Enter your password: 
+set /p app=Enter the application name (e.g., app1/app2/jsb1/jsb3): 
+set /p hours=Enter the number of hours to go back: 
 
-# Clean the log file
-> $LOG_FILE
+:: Determine which server to use based on app name
+if "%app%"=="app1" set server=192.168.0.1
+if "%app%"=="app3" set server=192.168.0.1
+if "%app%"=="app6" set server=192.168.0.1
 
-# Loop through each IP address from SERVER_IPS
-while read -r SERVER_IP; do
-    echo "Checking server $SERVER_IP..." >> $LOG_FILE
-    USERNAME="your_username"
-    PASSWORD="your_password"
-    
-    # Detect the server type and application name
-    serverType=$(sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no $USERNAME@$SERVER_IP "if [ -d '/opt/jboss' ]; then echo jboss; elif [ -d '/opt/springboot' ]; then echo springboot; else echo regular; fi")
+if "%app%"=="app2" set server=192.168.0.2
+if "%app%"=="app4" set server=192.168.0.2
+if "%app%"=="app7" set server=192.168.0.2
 
-    if [ "$serverType" == "jboss" ]; then
-        appName=$(sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no $USERNAME@$SERVER_IP "ls /opt/jboss/instance | head -n 1")
-        appName=${appName/_0000/}
-    elif [ "$serverType" == "springboot" ]; then
-        appName=$(sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no $USERNAME@$SERVER_IP "ls /opt/springboot/applications | head -n 1")
-        appName=${appName/-web/}
-    else
-        echo "No specific server detected on $SERVER_IP" >> $LOG_FILE
-        continue
-    fi
+if "%app:~0,4%"=="jsb1" set server=192.168.0.3
+if "%app:~0,4%"=="jsb3" set server=192.168.0.3
+if "%app:~0,4%"=="jsb6" set server=192.168.0.3
 
-    # Check application status
-    echo "Detected $serverType server, application: $appName" >> $LOG_FILE
-    status=$(sshpass -p $PASSWORD ssh -o StrictHostKeyChecking=no $USERNAME@$SERVER_IP "systemctl status $appName | head -n 5")
-    
-    # Log the status
-    echo "Status on $SERVER_IP:" >> $LOG_FILE
-    echo "$status" >> $LOG_FILE
-    echo "------------------------------" >> $LOG_FILE
-done <<< "$SERVER_IPS"
+:: You can add more conditions for server4 or any other fallback
+if not defined server (
+    echo Application name does not match any predefined rules.
+    pause
+    exit /b
+)
 
-# Display the log file content in the Jenkins console output
-cat $LOG_FILE
+echo Selected server: %server%
 
-# Optionally, exit with a non-zero status if any errors occurred to mark the build as failed
-if grep -q "inactive" $LOG_FILE; then
-    echo "One or more applications are inactive. Marking the build as failed."
-    exit 1  # Mark the build as failed if any application is down
-else
-    echo "All applications are running successfully."
-    exit 0  # Mark the build as successful
-fi
+:: Define the application path template (based on app name)
+set path_template=/opt/jboss/instance/%app%/logs/
+
+:: Create a local folder for downloads (organized by application and server)
+set localPath=C:\DownloadedLogs\%app%\
+if not exist %localPath% mkdir %localPath%
+
+:: Get the time range for logs on the selected server (based on the number of hours entered)
+for /f "tokens=*" %%i in ('plink -batch -pw %pass% %user%@%server% "date -u --date='%hours% hours ago' +%%Y%%m%%d%%H%%M"') do set backTime=%%i
+
+:: Fetch log files modified within the time frame from the specific application path
+plink -batch -pw %pass% %user%@%server% "find %path_template% -type f -newermt '%backTime%'" > loglist.txt
+
+:: Loop through each file found and download it using PSCP
+for /f "tokens=*" %%i in (loglist.txt) do (
+    echo Downloading %%i from server %server%...
+    pscp -pw %pass% %user%@%server%:"%%i" %localPath%
+)
+
+echo All logs downloaded successfully to %localPath%.
+pause
+
+
+
+==========
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
