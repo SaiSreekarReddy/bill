@@ -47,8 +47,13 @@ for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
         goto :continue
     )
 
-    :: Check the status of the application
-    for /f "delims=" %%s in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"systemctl is-active !appName!\""') do set "status=%%s"
+    :: Check the status of the application using appropriate command for JBoss or Spring Boot
+    if "!serverType!" == "jboss" (
+        for /f "delims=" %%s in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"echo %PASSWORD% | sudo -S /opt/jboss/bin/systemctl status !appName!\""') do set "status=%%s"
+    ) else if "!serverType!" == "springboot" (
+        for /f "delims=" %%s in ('plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"echo %PASSWORD% | sudo -S service !appName! status\""') do set "status=%%s"
+    )
+
     echo Application Name: !appName!
     echo Application Status: !status!
 
