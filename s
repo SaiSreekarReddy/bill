@@ -1,21 +1,15 @@
 @echo off
 setlocal enabledelayedexpansion
 
-:: Dynamically set the path to the text file with the list of server IPs
-set "IP_FILE=%~dp0server_ips.txt"
+:: Define the list of IP addresses directly in the script (space-separated)
+set "IP_LIST=192.168.1.10 192.168.1.11 192.168.1.12"
 
 :: Set your SSH username and password
 set "USERNAME=your_username"
 set "PASSWORD=your_password"
 
-:: Check if the IP file exists
-if not exist "%IP_FILE%" (
-    echo IP file not found: %IP_FILE%
-    exit /b 1
-)
-
-:: Loop through each IP in the text file
-for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
+:: Loop through each IP in the list
+for %%A in (%IP_LIST%) do (
     set "SERVER_IP=%%A"
     echo Checking server %SERVER_IP%...
 
@@ -59,7 +53,7 @@ for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
             plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"echo %PASSWORD% | sudo -S service !appName! start\""
         )
 
-        :: Remove the last line from the history to clear password
+        :: Remove the last line from the history to clear the password
         plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"history -d \$(history 1)\""
         
         echo Server %SERVER_IP% - Application was down and has been started
@@ -73,4 +67,5 @@ for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
     echo -------------------------
 )
 
+pause
 endlocal
