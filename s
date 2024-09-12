@@ -4,14 +4,6 @@ setlocal enabledelayedexpansion
 :: Dynamically set the path to the text file with the list of server IPs
 set "IP_FILE=%~dp0server_ips.txt"
 
-:: Set paths for logging the results
-set "UP_LOG=%~dp0servers_up.txt"
-set "DOWN_LOG=%~dp0servers_down.txt"
-
-:: Clear the logs before starting
-> "%UP_LOG%"
-> "%DOWN_LOG%"
-
 :: Set your SSH username and password
 set "USERNAME=your_username"
 set "PASSWORD=your_password"
@@ -57,7 +49,7 @@ for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
     echo Application Name: !appName!
     echo Application Status: !status!
 
-    :: If the application is inactive, start it with the appropriate command using sudo
+    :: Print the result to the console
     if "!status!" == "inactive" (
         echo Application is inactive, attempting to start...
 
@@ -70,22 +62,15 @@ for /f "usebackq tokens=*" %%A in ("%IP_FILE%") do (
         :: Remove the last line from the history to clear password
         plink.exe -batch -ssh %USERNAME%@%SERVER_IP% -pw %PASSWORD% -t "bash -c \"history -d \$(history 1)\""
         
-        echo Server %SERVER_IP% was down and has been started >> "%DOWN_LOG%"
+        echo Server %SERVER_IP% - Application was down and has been started
     ) else if "!status!" == "active" (
-        echo Application is already running, moving to the next server...
-        echo Server %SERVER_IP% was up >> "%UP_LOG%"
+        echo Server %SERVER_IP% - Application is running
     ) else (
-        echo Unknown status: !status!, moving to the next server...
+        echo Server %SERVER_IP% - Unknown status: !status!
     )
 
     :continue
     echo -------------------------
 )
-
-echo The following servers were down and started:
-type "%DOWN_LOG%"
-
-echo The following servers were already up:
-type "%UP_LOG%"
 
 endlocal
