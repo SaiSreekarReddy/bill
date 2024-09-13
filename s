@@ -1,38 +1,38 @@
 #!/bin/bash
 
-# Define SSH login credentials (replace with your actual username and password or use Jenkins environment variables)
+# Define SSH login credentials (use Jenkins environment variables or replace with your actual credentials)
 ssh_user="your_username"
 ssh_pass="your_password"
 
-# Multi-line parameter is passed as $1
-servers="$1"
+# Ensure we handle multi-line input from Jenkins correctly
+IFS=$'\n'  # Set Internal Field Separator to newline to handle multi-line input correctly
 
-# Function to detect server type (JBoss or Spring Boot)
+# Function to detect server type (based on directory presence)
 detect_server_type() {
     local server_ip="$1"
 
-    # Use sshpass to provide the password and SSH to the server
-    if sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'jboss'" > /dev/null 2>&1; then
+    # Use sshpass to SSH into the server and check for specific directories
+    if sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/jboss ]" > /dev/null 2>&1; then
         echo "JBoss"
-    elif sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'spring-boot'" > /dev/null 2>&1; then
+    elif sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/springboot ]" > /dev/null 2>&1; then
         echo "Spring Boot"
     else
         echo "Unknown"
     fi
 }
 
-# Function to get the application name based on server type
+# Function to get the application name based on server type and the path logic
 get_application_name() {
     local server_ip="$1"
     local server_type="$2"
     local app_name=""
 
     if [ "$server_type" == "JBoss" ]; then
-        # Fetch JBoss application name
-        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ps -ef | grep -i 'jboss' | grep -v 'grep' | awk '{print \$NF}'")
+        # Fetch JBoss application name from the deployments directory
+        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/jboss/deployments | head -n 1")
     elif [ "$server_type" == "Spring Boot" ]; then
-        # Fetch Spring Boot application name
-        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ps -ef | grep -i 'spring-boot' | grep -v 'grep' | awk '{print \$NF}'")
+        # Fetch Spring Boot application name from the deployments directory
+        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/springboot/deployments | head -n 1")
     fi
 
     # Clean up the application name by removing known suffixes (like _0000 or -web)
@@ -41,11 +41,10 @@ get_application_name() {
     echo "$app_name"
 }
 
-# Ensure we handle multi-line input from Jenkins correctly
-IFS=$'\n'
+# Loop through each server and log the server type and application name
+echo "Processing servers from Jenkins Multi-Line String Parameter:"
 
-# Loop through each server (each line in the parameter)
-for server_ip in $servers; do
+for server_ip in ${Servers}; do
     echo "----------------------------------------"
     echo "Checking Server: $server_ip"
     
