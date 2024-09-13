@@ -1,83 +1,59 @@
-@echo off
-setlocal enabledelayedexpansion
+#!/bin/bash
 
-:: Define the list of IP addresses directly in the script (space-separated)
-set "IP_LIST=192.168.1.10 192.168.1.11 192.168.1.12"
+# List of servers taken from Jenkins Multi-String Parameter (pass the parameter as $1)
+servers="$1"
 
-:: Set your SSH username and password
-set "USERNAME=your_username"
-set "PASSWORD=your_password"
+# Function to detect server type (JBoss or Spring Boot)
+detect_server_type() {
+    local server_ip="$1"
+    
+    # Use SSH to check if JBoss or Spring Boot is running on the server
+    if ssh "$server_ip" "pgrep -f 'jboss'" > /dev/null 2>&1; then
+        echo "JBoss"
+    elif ssh "$server_ip" "pgrep -f 'spring-boot'" > /dev/null 2>&1; then
+        echo "Spring Boot"
+    else
+        echo "Unknown"
+    fi
+}
 
-:: Loop through each IP in the list
-for %%A in (%IP_LIST%) do (
-    set "SERVER_IP=%%A"
-    echo Checking server !SERVER_IP!...
+# Function to get the application name based on server type
+get_application_name() {
+    local server_ip="$1"
+    local server_type="$2"
+    local app_name=""
 
-    :: Detect the server type (JBoss or Spring Boot) as a separate Plink command
-    plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'if [ -d /opt/jboss ]; then echo jboss; elif [ -d /opt/springboot ]; then echo springboot; else echo regular; fi'" > tmp_server_type.txt
-    set /p serverType=<tmp_server_type.txt
-    del tmp_server_type.txt
+    if [ "$server_type" == "JBoss" ]; then
+        # Fetch JBoss application name
+        app_name=$(ssh "$server_ip" "ps -ef | grep -i 'jboss' | grep -v 'grep' | awk '{print \$NF}'")
+    elif [ "$server_type" == "Spring Boot" ]; then
+        # Fetch Spring Boot application name
+        app_name=$(ssh "$server_ip" "ps -ef | grep -i 'spring-boot' | grep -v 'grep' | awk '{print \$NF}'")
+    fi
 
-    :: Output detected server type
-    echo Detected Server Type for !SERVER_IP!: !serverType!
+    # Clean up the application name by removing known suffixes (like _0000 or -web)
+    app_name=$(echo "$app_name" | sed 's/_0000//g' | sed 's/-web//g')
 
-    :: Fetch application name based on the detected server type
-    if "!serverType!" == "jboss" (
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'ls /opt/jboss/instance | head -n 1'" > tmp_app_name.txt
-        set /p appName=<tmp_app_name.txt
-        del tmp_app_name.txt
-        set "appName=!appName:_0000=!"
-    ) else if "!serverType!" == "springboot" (
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'ls /opt/springboot/applications | head -n 1'" > tmp_app_name.txt
-        set /p appName=<tmp_app_name.txt
-        del tmp_app_name.txt
-        set "appName=!appName:-web=!"
-    ) else (
-        echo No specific server detected on !SERVER_IP!, skipping...
-        set "appName=NoAppFound"
-        goto :continue
-    )
+    echo "$app_name"
+}
 
-    :: Output detected application name
-    echo Application Name for !SERVER_IP!: !appName!
+# Loop through each server and log the server type and application name
+echo "Checking servers:"
 
-    :: Check the status of the application and filter the result to capture only "active" or "inactive"
-    if "!serverType!" == "jboss" (
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S /opt/jboss/bin/systemctl is-active !appName!'" > tmp_status.txt
-    ) else if "!serverType!" == "springboot" (
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S service !appName! status | grep -E \"(active|inactive)\"'" > tmp_status.txt
-    )
-
-    :: Read the filtered status from the file
-    set /p status=<tmp_status.txt
-    del tmp_status.txt
-
-    :: Output application status
-    echo Application Status for !SERVER_IP!: !status!
-
-    :: If the application is inactive, attempt to start it
-    if "!status!" == "inactive" (
-        echo Application is inactive, attempting to start...
-
-        if "!serverType!" == "jboss" (
-            plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S /opt/jboss/bin/systemctl start !appName!'"
-        ) else if "!serverType!" == "springboot" (
-            plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'echo !PASSWORD! | sudo -S service !appName! start'"
-        )
-
-        :: Clear the password from history
-        plink.exe -batch -ssh !USERNAME!@!SERVER_IP! -pw !PASSWORD! -t "bash -c 'history -d \$(history 1)'"
-        
-        echo Server !SERVER_IP! - Application was down and has been started
-    ) else if "!status!" == "active" (
-        echo Server !SERVER_IP! - Application is running
-    ) else (
-        echo Server !SERVER_IP! - Unknown status: !status!
-    )
-
-    :continue
-    echo --------------------------
-)
-
-pause
-endlocal
+IFS=$'\n' # Ensure we handle multi-line server input correctly
+for server_ip in $servers; do
+    echo "----------------------------------------"
+    echo "Checking Server: $server_ip"
+    
+    # Detect the server type
+    server_type=$(detect_server_type "$server_ip")
+    echo "Detected Server Type: $server_type"
+    
+    # If a known server type, get the application name
+    if [ "$server_type" != "Unknown" ]; then
+        application_name=$(get_application_name "$server_ip" "$server_type")
+        echo "Application Name: $application_name"
+    else
+        echo "No known server type detected on $server_ip"
+    fi
+done
