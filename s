@@ -3,14 +3,18 @@
 # List of servers taken from Jenkins Multi-String Parameter (pass the parameter as $1)
 servers="$1"
 
+# Define SSH login credentials
+ssh_user="your_username"      # Replace with your SSH username
+ssh_pass="your_password"      # Replace with your SSH password
+
 # Function to detect server type (JBoss or Spring Boot)
 detect_server_type() {
     local server_ip="$1"
-    
-    # Use SSH to check if JBoss or Spring Boot is running on the server
-    if ssh "$server_ip" "pgrep -f 'jboss'" > /dev/null 2>&1; then
+
+    # Use sshpass to provide the password and SSH to the server
+    if sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'jboss'" > /dev/null 2>&1; then
         echo "JBoss"
-    elif ssh "$server_ip" "pgrep -f 'spring-boot'" > /dev/null 2>&1; then
+    elif sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'spring-boot'" > /dev/null 2>&1; then
         echo "Spring Boot"
     else
         echo "Unknown"
@@ -25,10 +29,10 @@ get_application_name() {
 
     if [ "$server_type" == "JBoss" ]; then
         # Fetch JBoss application name
-        app_name=$(ssh "$server_ip" "ps -ef | grep -i 'jboss' | grep -v 'grep' | awk '{print \$NF}'")
+        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ps -ef | grep -i 'jboss' | grep -v 'grep' | awk '{print \$NF}'")
     elif [ "$server_type" == "Spring Boot" ]; then
         # Fetch Spring Boot application name
-        app_name=$(ssh "$server_ip" "ps -ef | grep -i 'spring-boot' | grep -v 'grep' | awk '{print \$NF}'")
+        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ps -ef | grep -i 'spring-boot' | grep -v 'grep' | awk '{print \$NF}'")
     fi
 
     # Clean up the application name by removing known suffixes (like _0000 or -web)
