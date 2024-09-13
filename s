@@ -1,11 +1,11 @@
 #!/bin/bash
 
-# List of servers taken from Jenkins Multi-String Parameter (pass the parameter as $1)
-servers="$1"
+# Define SSH login credentials (replace with your actual username and password or use Jenkins environment variables)
+ssh_user="your_username"
+ssh_pass="your_password"
 
-# Define SSH login credentials
-ssh_user="your_username"      # Replace with your SSH username
-ssh_pass="your_password"      # Replace with your SSH password
+# Multi-line parameter is passed as $1
+servers="$1"
 
 # Function to detect server type (JBoss or Spring Boot)
 detect_server_type() {
@@ -41,10 +41,10 @@ get_application_name() {
     echo "$app_name"
 }
 
-# Loop through each server and log the server type and application name
-echo "Checking servers:"
+# Ensure we handle multi-line input from Jenkins correctly
+IFS=$'\n'
 
-IFS=$'\n' # Ensure we handle multi-line server input correctly
+# Loop through each server (each line in the parameter)
 for server_ip in $servers; do
     echo "----------------------------------------"
     echo "Checking Server: $server_ip"
