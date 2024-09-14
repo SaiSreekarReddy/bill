@@ -11,7 +11,6 @@ IFS=$'\n'  # Set Internal Field Separator to newline to handle multi-line input 
 detect_server_type() {
     local server_ip="$1"
 
-    # Use sshpass to SSH into the server and check for specific directories
     if sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/jboss ]" > /dev/null 2>&1; then
         echo "JBoss"
     elif sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/springboot ]" > /dev/null 2>&1; then
@@ -28,20 +27,50 @@ get_application_name() {
     local app_name=""
 
     if [ "$server_type" == "JBoss" ]; then
-        # Fetch JBoss application name from the deployments directory
         app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/jboss/deployments | head -n 1")
     elif [ "$server_type" == "Spring Boot" ]; then
-        # Fetch Spring Boot application name from the deployments directory
         app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/springboot/deployments | head -n 1")
     fi
 
-    # Clean up the application name by removing known suffixes (like _0000 or -web)
     app_name=$(echo "$app_name" | sed 's/_0000//g' | sed 's/-web//g')
 
     echo "$app_name"
 }
 
-# Loop through each server and log the server type and application name
+# Function to check if the application is active
+is_application_active() {
+    local server_ip="$1"
+    local server_type="$2"
+    local app_name="$3"
+    local status="inactive"
+
+    if [ "$server_type" == "JBoss" ]; then
+        # Check if JBoss is active
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "systemctl is-active jboss")
+    elif [ "$server_type" == "Spring Boot" ]; then
+        # Check if Spring Boot is active
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "service $app_name status | grep 'active' || echo inactive")
+    fi
+
+    echo "$status"
+}
+
+# Function to start the application if it's inactive
+start_application() {
+    local server_ip="$1"
+    local server_type="$2"
+    local app_name="$3"
+
+    if [ "$server_type" == "JBoss" ]; then
+        echo "Starting JBoss on $server_ip"
+        sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "systemctl start jboss"
+    elif [ "$server_type" == "Spring Boot" ]; then
+        echo "Starting Spring Boot ($app_name) on $server_ip"
+        sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "service /opt/springboot $app_name start"
+    fi
+}
+
+# Main loop to process each server
 echo "Processing servers from Jenkins Multi-Line String Parameter:"
 
 for server_ip in ${Servers}; do
@@ -56,6 +85,18 @@ for server_ip in ${Servers}; do
     if [ "$server_type" != "Unknown" ]; then
         application_name=$(get_application_name "$server_ip" "$server_type")
         echo "Application Name: $application_name"
+        
+        # Check if the application is active
+        app_status=$(is_application_active "$server_ip" "$server_type" "$application_name")
+        echo "Application Status: $app_status"
+        
+        # If the application is inactive, start it
+        if [ "$app_status" == "inactive" ]; then
+            echo "Application is inactive, starting the application..."
+            start_application "$server_ip" "$server_type" "$application_name"
+        else
+            echo "Application is already active."
+        fi
     else
         echo "No known server type detected on $server_ip"
     fi
