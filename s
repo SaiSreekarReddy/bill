@@ -37,7 +37,7 @@ get_application_name() {
     echo "$app_name"
 }
 
-# Function to check if the application is active
+# Function to check if the application is active using pgrep or ps
 is_application_active() {
     local server_ip="$1"
     local server_type="$2"
@@ -45,11 +45,11 @@ is_application_active() {
     local status="inactive"
 
     if [ "$server_type" == "JBoss" ]; then
-        # Check if JBoss is active
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "systemctl is-active jboss")
+        # Check if JBoss process is running
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'jboss' > /dev/null && echo active || echo inactive")
     elif [ "$server_type" == "Spring Boot" ]; then
-        # Check if Spring Boot is active
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "service $app_name status | grep 'active' || echo inactive")
+        # Check if Spring Boot process is running
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f '$app_name' > /dev/null && echo active || echo inactive")
     fi
 
     echo "$status"
