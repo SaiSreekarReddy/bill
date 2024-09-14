@@ -37,22 +37,25 @@ get_application_name() {
     echo "$app_name"
 }
 
-# Function to check if the application is active using pgrep or ps
+# Function to check if a port is in use (indicating the application is running)
 is_application_active() {
     local server_ip="$1"
     local server_type="$2"
-    local app_name="$3"
     local status="inactive"
 
     if [ "$server_type" == "JBoss" ]; then
-        # Check if JBoss process is running
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f 'jboss' > /dev/null && echo active || echo inactive")
+        # Check if the JBoss default port (8080) is in use
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "netstat -tuln | grep ':8080' || echo inactive")
     elif [ "$server_type" == "Spring Boot" ]; then
-        # Check if Spring Boot process is running
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "pgrep -f '$app_name' > /dev/null && echo active || echo inactive")
+        # Check if the Spring Boot default port (e.g., 8080) is in use
+        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "netstat -tuln | grep ':8080' || echo inactive")
     fi
 
-    echo "$status"
+    if [[ $status == *":8080"* ]]; then
+        echo "active"
+    else
+        echo "inactive"
+    fi
 }
 
 # Function to start the application if it's inactive
@@ -63,10 +66,10 @@ start_application() {
 
     if [ "$server_type" == "JBoss" ]; then
         echo "Starting JBoss on $server_ip"
-        sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "systemctl start jboss"
+        sshpass -p "$ssh_pass" ssh -t -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "echo $ssh_pass | sudo -S systemctl start jboss && history -d $(history 1)"
     elif [ "$server_type" == "Spring Boot" ]; then
         echo "Starting Spring Boot ($app_name) on $server_ip"
-        sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "service /opt/springboot $app_name start"
+        sshpass -p "$ssh_pass" ssh -t -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "echo $ssh_pass | sudo -S service /opt/springboot $app_name start && history -d $(history 1)"
     fi
 }
 
@@ -86,8 +89,8 @@ for server_ip in ${Servers}; do
         application_name=$(get_application_name "$server_ip" "$server_type")
         echo "Application Name: $application_name"
         
-        # Check if the application is active
-        app_status=$(is_application_active "$server_ip" "$server_type" "$application_name")
+        # Check if the application is active (by checking if the port is in use)
+        app_status=$(is_application_active "$server_ip" "$server_type")
         echo "Application Status: $app_status"
         
         # If the application is inactive, start it
