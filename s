@@ -1,106 +1,15 @@
-#!/bin/bash
+We acknowledge the lands which constitute the present-day City of Mississauga as being part of the Treaty and Traditional Territory of the Mississaugas of the Credit First Nation, the Haudenosaunee (hoh-DEE-noh-SHoh-nee) Confederacy, the Huron-Wendat, and the Wyandot (wai-uhn-daat) Nations. We recognize these peoples and their ancestors as the original inhabitants who have lived and thrived on these lands since time immemorial. Their deep connection to the earth and respect for the natural world continue to inspire us today.
 
-# Define SSH login credentials (use Jenkins environment variables or replace with your actual credentials)
-ssh_user="your_username"
-ssh_pass="your_password"
+The City of Mississauga stands on these traditional territories, and it has become a vibrant home for many people from around the globe, including diverse Indigenous communities who continue to enrich the cultural fabric of this city. I also wish to acknowledge the Anishinaabe origins of Mississauga, reflecting the city's name and heritage that continues to resonate with the people who call it home.
 
-# Ensure we handle multi-line input from Jenkins correctly
-IFS=$'\n'  # Set Internal Field Separator to newline to handle multi-line input correctly
+Standing here today, I am reminded of my own ancestry, originating from Hyderabad, India—a place with its own rich history, diverse cultures, and traditions. The city of Hyderabad, known for its amalgamation of people, languages, and traditions, has taught me the value of coexisting and respecting the many layers of history that shape us. Just as the lands of Mississauga carry the stories of the Indigenous Peoples who have nurtured them, so too does Hyderabad carry the stories of various communities who have lived in and cared for the land over centuries.
 
-# Function to detect server type (based on directory presence)
-detect_server_type() {
-    local server_ip="$1"
+In Hyderabad, my ancestors cultivated a strong sense of community, rooted in relationships with each other and the land that sustained them. I recognize in the Mississaugas of the Credit First Nation and other Indigenous Nations a similar spirit—a respect for the land as a living entity and an understanding that our survival and well-being are deeply interwoven with the natural environment. In both places, traditional knowledge has been a guiding force, passed down through generations, teaching us how to live in harmony with our surroundings.
 
-    if sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/jboss ]" > /dev/null 2>&1; then
-        echo "JBoss"
-    elif sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "[ -d /opt/springboot ]" > /dev/null 2>&1; then
-        echo "Spring Boot"
-    else
-        echo "Unknown"
-    fi
-}
+As a settler here, I feel a deep sense of gratitude for the opportunity to live, work, and grow on this land. I reflect on my own journey from Hyderabad to Mississauga, and I am reminded that just as my ancestors sought ways to live harmoniously with the land, it is my responsibility to honor and respect the lands of the Indigenous Peoples who were here long before us.
 
-# Function to get the application name based on server type and the path logic
-get_application_name() {
-    local server_ip="$1"
-    local server_type="$2"
-    local app_name=""
+Today, Mississauga is a place where people from many backgrounds come together, each of us carrying our own stories and cultural heritage. I am humbled by the resilience of the Indigenous communities who have endured and preserved their cultural practices despite the many challenges they have faced. Their teachings of respect, reciprocity, and stewardship continue to be relevant for all of us as we learn to live together in a good way.
 
-    if [ "$server_type" == "JBoss" ]; then
-        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/jboss/deployments | head -n 1")
-    elif [ "$server_type" == "Spring Boot" ]; then
-        app_name=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "ls /opt/springboot/deployments | head -n 1")
-    fi
+I also acknowledge that while I share stories from my heritage, it is essential to recognize that my presence here is part of a broader history of migration, and I am committed to understanding and acknowledging the impacts of colonization on the First Peoples of this land. I hope that, as settlers, we continue to educate ourselves, uplift Indigenous voices, and actively support the efforts of reconciliation.
 
-    app_name=$(echo "$app_name" | sed 's/_0000//g' | sed 's/-web//g')
-
-    echo "$app_name"
-}
-
-# Function to check if a port is in use (indicating the application is running)
-is_application_active() {
-    local server_ip="$1"
-    local server_type="$2"
-    local status="inactive"
-
-    if [ "$server_type" == "JBoss" ]; then
-        # Check if the JBoss default port (8080) is in use
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "netstat -tuln | grep ':8080' || echo inactive")
-    elif [ "$server_type" == "Spring Boot" ]; then
-        # Check if the Spring Boot default port (e.g., 8080) is in use
-        status=$(sshpass -p "$ssh_pass" ssh -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "netstat -tuln | grep ':8080' || echo inactive")
-    fi
-
-    if [[ $status == *":8080"* ]]; then
-        echo "active"
-    else
-        echo "inactive"
-    fi
-}
-
-# Function to start the application if it's inactive
-start_application() {
-    local server_ip="$1"
-    local server_type="$2"
-    local app_name="$3"
-
-    if [ "$server_type" == "JBoss" ]; then
-        echo "Starting JBoss on $server_ip"
-        sshpass -p "$ssh_pass" ssh -t -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "echo $ssh_pass | sudo -S systemctl start jboss && history -d $(history 1)"
-    elif [ "$server_type" == "Spring Boot" ]; then
-        echo "Starting Spring Boot ($app_name) on $server_ip"
-        sshpass -p "$ssh_pass" ssh -t -o StrictHostKeyChecking=no "$ssh_user@$server_ip" "echo $ssh_pass | sudo -S service /opt/springboot $app_name start && history -d $(history 1)"
-    fi
-}
-
-# Main loop to process each server
-echo "Processing servers from Jenkins Multi-Line String Parameter:"
-
-for server_ip in ${Servers}; do
-    echo "----------------------------------------"
-    echo "Checking Server: $server_ip"
-    
-    # Detect the server type
-    server_type=$(detect_server_type "$server_ip")
-    echo "Detected Server Type: $server_type"
-    
-    # If a known server type, get the application name
-    if [ "$server_type" != "Unknown" ]; then
-        application_name=$(get_application_name "$server_ip" "$server_type")
-        echo "Application Name: $application_name"
-        
-        # Check if the application is active (by checking if the port is in use)
-        app_status=$(is_application_active "$server_ip" "$server_type")
-        echo "Application Status: $app_status"
-        
-        # If the application is inactive, start it
-        if [ "$app_status" == "inactive" ]; then
-            echo "Application is inactive, starting the application..."
-            start_application "$server_ip" "$server_type" "$application_name"
-        else
-            echo "Application is already active."
-        fi
-    else
-        echo "No known server type detected on $server_ip"
-    fi
-done
+In closing, I honor the Mississaugas of the Credit First Nation, the Haudenosaunee Confederacy, the Huron-Wendat, the Wyandot, and all the Indigenous Peoples of this land. I carry my ancestry with me from Hyderabad, India, and I extend my respect and solidarity to the original caretakers of this place. May we all walk together on this journey, towards a future of mutual respect, peace, and understanding.
