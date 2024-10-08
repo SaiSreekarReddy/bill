@@ -1,207 +1,177 @@
-import javax.swing.*;
-import java.awt.event.ActionEvent;
-import java.awt.event.ActionListener;
-import java.io.BufferedReader;
-import java.io.InputStreamReader;
+@echo off
+setlocal enabledelayedexpansion
 
-public class JiraStatusChangerUI {
+cls
 
-    // Jira base URL and credentials
-    private static final String JIRA_BASE_URL = "https://track.td.com";
-    private static final String JIRA_USERNAME = "your_jira_username";
-    private static final String JIRA_PASSWORD = "your_jira_password";  // Use password here
+set "username=%~1"
+set "password=X2"
+set "crdfullupgradeepic=CRPHCRD-19891"
+set "coffullupgradeepic=CRPHCOF-20580"
 
-    // Epic links based on ticket patterns
-    private static final String EPIC_LINK_1 = "EPIC-001";  // For pattern abcddrf
-    private static final String EPIC_LINK_2 = "EPIC-002";  // For pattern abcdgrp
+:: Prompt for Jira ticket number or URL
+:ticketPrompt
+set "ticketNumber="
+set "ticketInput="
 
-    public static void main(String[] args) {
-        // Create JFrame for UI
-        JFrame frame = new JFrame("Jira Status Changer");
-        frame.setDefaultCloseOperation(JFrame.EXIT_ON_CLOSE);
-        frame.setSize(400, 200);
+set /p ticketInput="Enter Jira Ticket Number or URL (or type 'exit' to quit): "
+if /i "%ticketInput%"=="exit" goto :end
+if /i "%ticketInput%"=="EXIT" goto :end
+if "%ticketInput%"=="" goto :ticketPrompt
 
-        // Create panel
-        JPanel panel = new JPanel();
-        frame.add(panel);
-        placeComponents(panel);
+:: Extract the ticket number if a URL is provided
+for /f "tokens=4 delims=/" %%i in ("%ticketInput:/https://track.td.com/browse/=%") do set "ticketNumber=%%i"
+if not defined ticketNumber set "ticketNumber=%ticketInput%"
 
-        // Display the frame
-        frame.setVisible(true);
-    }
+if "%ticketNumber%"=="" (
+    echo Ticket number cannot be empty.
+    goto :ticketPrompt
+)
 
-    private static void placeComponents(JPanel panel) {
-        panel.setLayout(null);
+call :epic_link
+call :check
+pause
+call :transition
 
-        // Label for Jira issue key
-        JLabel issueLabel = new JLabel("Jira Issue Key:");
-        issueLabel.setBounds(10, 20, 150, 25);
-        panel.add(issueLabel);
+:testset
+set "testset="
 
-        // Text field for Jira issue key input
-        JTextField issueText = new JTextField(20);
-        issueText.setBounds(150, 20, 200, 25);
-        panel.add(issueText);
+set /p testset="Enter the test set: "
+if /i "%testset%"=="" goto :testset
 
-        // Button to submit and change the status
-        JButton submitButton = new JButton("Change Status and Add Epic Link");
-        submitButton.setBounds(150, 100, 250, 25);
-        panel.add(submitButton);
+:: Extract the project key from the ticket number (everything before the first hyphen)
+for /f "tokens=1 delims=-" %%a in ("%ticketNumber%") do set project_key=%%a
 
-        // Action listener for the button click
-        submitButton.addActionListener(new ActionListener() {
-            public void actionPerformed(ActionEvent e) {
-                String issueKey = issueText.getText();
-                try {
-                    // Get current issue status
-                    String currentStatus = getIssueStatus(issueKey);
-                    JOptionPane.showMessageDialog(panel, "Current status of " + issueKey + ": " + currentStatus);
+set "month="
+set /p month="Enter the month you want to upgrade: "
 
-                    // Perform transitions based on current status
-                    handleStatusTransitions(issueKey, currentStatus, panel);
+:main
+set "malcode="
+set /p malcode="Enter the malcode (type 'exit' to quit): "
+set "assignee="
 
-                    // Set the Epic Link based on ticket pattern
-                    setEpicLink(issueKey);
-                    JOptionPane.showMessageDialog(panel, "Epic Link added to " + issueKey);
+call :setassign
+if /i "%malcode%"=="exit" goto :ticketPrompt
+if "%malcode%"=="" goto :main
+echo Creating subtask with malcode: %malcode%
 
-                } catch (Exception ex) {
-                    JOptionPane.showMessageDialog(panel, "Error: " + ex.getMessage());
-                    ex.printStackTrace();
-                }
-            }
-        });
-    }
+:: Construct the JSON payload
+set json_data={"fields": {"project":{"key": "%project_key%"}, "parent": {"key": "%ticketNumber%"}, "summary":"Please Upgrade the %malcode% in %testset% to %month%", "issuetype": {"name":"Sub-task"}, "assignee": {"name": "%assignee%"}}}
 
-    // Function to handle status transitions based on current status
-    private static void handleStatusTransitions(String issueKey, String currentStatus, JPanel panel) throws Exception {
-        switch (currentStatus.toLowerCase()) {
-            case "to do":
-                transitionIssueStatus(issueKey, "Refining");
-                transitionIssueStatus(issueKey, "Waiting on Dependencies");
-                transitionIssueStatus(issueKey, "Ready to Start");
-                transitionIssueStatus(issueKey, "In Progress");
-                JOptionPane.showMessageDialog(panel, "Status transitioned to In Progress");
-                break;
+:: Save the JSON to a temporary file
+echo %json_data% > json_payload.txt
 
-            case "refining":
-                transitionIssueStatus(issueKey, "Waiting on Dependencies");
-                transitionIssueStatus(issueKey, "Ready to Start");
-                transitionIssueStatus(issueKey, "In Progress");
-                JOptionPane.showMessageDialog(panel, "Status transitioned to In Progress");
-                break;
+:: Use curl to create the subtask
+curl -D- -u %username%:%password% -X POST -d @json_payload.txt -H "Content-Type: application/json" https://track.td.com/rest/api/2/issue/
 
-            case "waiting on dependencies":
-                transitionIssueStatus(issueKey, "Ready to Start");
-                transitionIssueStatus(issueKey, "In Progress");
-                JOptionPane.showMessageDialog(panel, "Status transitioned to In Progress");
-                break;
+:: Cleanup
+del json_payload.txt
+call :epic_link
+goto :main
 
-            case "ready to start":
-                transitionIssueStatus(issueKey, "In Progress");
-                JOptionPane.showMessageDialog(panel, "Status transitioned to In Progress");
-                break;
+:end
+echo Exiting program...
+exit /b
 
-            case "in progress":
-                JOptionPane.showMessageDialog(panel, "Issue is already in In Progress.");
-                break;
+:setassign
+set "uwbare=NAIDS29"
+set "aapare=TAE7763"
+set found=false
 
-            default:
-                JOptionPane.showMessageDialog(panel, "Unexpected status: " + currentStatus);
-        }
-    }
+:: Check in list 1
+echo %malcode% | findstr /i "MP AMS OPDH ADDRP" >nul && (
+    set "assignee=%aapare%"
+    goto :gotassignee
+)
 
-    // Function to get the issue's current status using curl
-    private static String getIssueStatus(String issueKey) throws Exception {
-        String command = String.format(
-                "curl -u %s:%s -X GET -H \"Accept: application/json\" \"%s/rest/api/2/issue/%s\"",
-                JIRA_USERNAME, JIRA_PASSWORD, JIRA_BASE_URL, issueKey
-        );
+:: Check in list 2
+echo %malcode% | findstr /i "NAIDS29" >nul && (
+    set "assignee=%uwbare%"
+    goto :gotassignee
+)
 
-        // Execute the curl command
-        Process process = Runtime.getRuntime().exec(command);
-        BufferedReader reader = new BufferedReader(new InputStreamReader(process.getInputStream()));
-        StringBuilder result = new StringBuilder();
-        String line;
+echo "TAE7763 is Piyush"
+echo "NAIDS29 is Sriram"
+set /p assignee="Enter assignee (or type 'exit' to quit): "
+if /i "%assignee%"=="exit" goto :end
+if "%assignee%"=="" goto :ticketPrompt
 
-        while ((line = reader.readLine()) != null) {
-            result.append(line);
-        }
+:gotassignee
+echo Got the assignee: %assignee%
+goto :eof
 
-        process.waitFor();
+:epic_link
+if /i "%ticketNumber:~0,7%"=="CRPHCRD" (
+    curl -u %username%:%password% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"customfield_10006\":\"%crdfullupgradeepic%\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%
+    echo CRD epic added
+) else if /i "%ticketNumber:~0,7%"=="CRPHCOF" (
+    curl -u %username%:%password% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"customfield_10006\":\"%coffullupgradeepic%\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%
+    echo COF epic added
+) else (
+    echo Don't have your epic link yet
+)
+goto :eof
 
-        // Parse the status from the JSON response (simple string search for "status")
-        String jsonResponse = result.toString();
-        int statusStartIndex = jsonResponse.indexOf("\"status\":") + 10;
-        int statusEndIndex = jsonResponse.indexOf("\"", statusStartIndex);
-        String currentStatus = jsonResponse.substring(statusStartIndex, statusEndIndex);
+:check
+:: Get the current status of the Jira issue
+curl -s -u %username%:%password% -X GET -H "Content-Type: application/json" https://track.td.com/rest/api/2/issue/%ticketNumber%?fields=status > current_status.json
 
-        return currentStatus;
-    }
+:: Extract the status
+for /f "tokens=3 delims=:," %%i in ('findstr "status" current_status.json') do set "current_status=%%i"
+set "current_status=%current_status:~1,-1%"  :: Clean up the extracted value
 
-    // Function to transition the issue status using curl
-    private static boolean transitionIssueStatus(String issueKey, String targetStatus) throws Exception {
-        // Get the transition ID for the target status (this would require another curl call, simplified here)
-        String transitionId = getTransitionId(targetStatus);
-        if (transitionId == null) {
-            System.out.println("No valid transition found for target status: " + targetStatus);
-            return false;
-        }
+if "%current_status%"=="" (
+    echo Error: Failed to extract the current status.
+    goto :end
+)
 
-        // Build the curl command to perform the transition
-        String command = String.format(
-                "curl -u %s:%s -X POST -H \"Content-Type: application/json\" -d '{\"transition\": {\"id\": \"%s\"}}' \"%s/rest/api/2/issue/%s/transitions\"",
-                JIRA_USERNAME, JIRA_PASSWORD, transitionId, JIRA_BASE_URL, issueKey
-        );
+echo Current status is: %current_status%
+del current_status.json
+goto :eof
 
-        // Execute the curl command
-        Process process = Runtime.getRuntime().exec(command);
-        process.waitFor();
+:transition
+:: Perform the necessary transitions based on the current status
 
-        // If successful, curl should return an empty response body and a status code 204 (No Content)
-        return process.exitValue() == 0;
-    }
+if /i "%current_status%"=="To Do" (
+    echo Moving ticket from 'To Do' to 'In Progress'...
+    call :move_to_refining
+    call :move_to_waiting_on_dependencies
+    call :move_to_ready_to_start
+    call :move_to_in_progress
+) else if /i "%current_status%"=="Refining" (
+    echo Ticket is in 'Refining', moving to 'In Progress'...
+    call :move_to_waiting_on_dependencies
+    call :move_to_ready_to_start
+    call :move_to_in_progress
+) else if /i "%current_status%"=="Waiting on Dependencies" (
+    echo Ticket is in 'Waiting on Dependencies', moving to 'In Progress'...
+    call :move_to_ready_to_start
+    call :move_to_in_progress
+) else if /i "%current_status%"=="Ready to Start" (
+    echo Ticket is in 'Ready to Start', moving to 'In Progress'...
+    call :move_to_in_progress
+) else if /i "%current_status%"=="In Progress" (
+    echo Ticket is already 'In Progress'. No transition needed.
+) else (
+    echo No valid transition path for the current status: %current_status%
+)
+goto :eof
 
-    // Function to get the transition ID for the target status
-    private static String getTransitionId(String targetStatus) {
-        switch (targetStatus.toLowerCase()) {
-            case "in progress":
-                return "711";  // Transition ID for In Progress
-            case "ready to start":
-                return "691";  // Transition ID for Ready to Start
-            case "waiting on dependencies":
-                return "681";  // Transition ID for Waiting on Dependencies
-            case "refining":
-                return "701";  // Transition ID for Refining
-            default:
-                return null;
-        }
-    }
+:move_to_refining
+echo Moving to Refining...
+curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"701\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
+goto :eof
 
-    // Function to set the Epic Link based on the issue key pattern
-    private static void setEpicLink(String issueKey) throws Exception {
-        String epicLink = null;
+:move_to_waiting_on_dependencies
+echo Moving to Waiting on Dependencies...
+curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"681\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
+goto :eof
 
-        // Check the first seven letters to determine the Epic Link
-        if (issueKey.toLowerCase().startsWith("abcddrf")) {
-            epicLink = EPIC_LINK_1;
-        } else if (issueKey.toLowerCase().startsWith("abcdgrp")) {
-            epicLink = EPIC_LINK_2;
-        }
+:move_to_ready_to_start
+echo Moving to Ready to Start...
+curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"691\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
+goto :eof
 
-        if (epicLink != null) {
-            // Curl command to update the Epic Link of the issue
-            String command = String.format(
-                    "curl -u %s:%s -X PUT -H \"Content-Type: application/json\" -d '{\"fields\": {\"customfield_10008\": \"%s\"}}' \"%s/rest/api/2/issue/%s\"",
-                    JIRA_USERNAME, JIRA_PASSWORD, epicLink, JIRA_BASE_URL, issueKey
-            );
-
-            // Execute the curl command
-            Process process = Runtime.getRuntime().exec(command);
-            process.waitFor();
-
-            if (process.exitValue() != 0) {
-                throw new RuntimeException("Failed to update Epic Link for " + issueKey);
-            }
-        }
-    }
-}
+:move_to_in_progress
+echo Moving to In Progress...
+curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"711\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
+goto :eof
