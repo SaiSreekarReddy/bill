@@ -1,177 +1,66 @@
 @echo off
 setlocal enabledelayedexpansion
 
-cls
+:: Prompt the user to choose between downloading to Windows or a Linux server
+echo Do you want to download the file to Windows or a Linux server?
+echo 1. Windows
+echo 2. Linux server
+set /p choice="Enter 1 for Windows or 2 for Linux server: "
 
-set "username=%~1"
-set "password=X2"
-set "crdfullupgradeepic=CRPHCRD-19891"
-set "coffullupgradeepic=CRPHCOF-20580"
-
-:: Prompt for Jira ticket number or URL
-:ticketPrompt
-set "ticketNumber="
-set "ticketInput="
-
-set /p ticketInput="Enter Jira Ticket Number or URL (or type 'exit' to quit): "
-if /i "%ticketInput%"=="exit" goto :end
-if /i "%ticketInput%"=="EXIT" goto :end
-if "%ticketInput%"=="" goto :ticketPrompt
-
-:: Extract the ticket number if a URL is provided
-for /f "tokens=4 delims=/" %%i in ("%ticketInput:/https://track.td.com/browse/=%") do set "ticketNumber=%%i"
-if not defined ticketNumber set "ticketNumber=%ticketInput%"
-
-if "%ticketNumber%"=="" (
-    echo Ticket number cannot be empty.
-    goto :ticketPrompt
-)
-
-call :epic_link
-call :check
-pause
-call :transition
-
-:testset
-set "testset="
-
-set /p testset="Enter the test set: "
-if /i "%testset%"=="" goto :testset
-
-:: Extract the project key from the ticket number (everything before the first hyphen)
-for /f "tokens=1 delims=-" %%a in ("%ticketNumber%") do set project_key=%%a
-
-set "month="
-set /p month="Enter the month you want to upgrade: "
-
-:main
-set "malcode="
-set /p malcode="Enter the malcode (type 'exit' to quit): "
-set "assignee="
-
-call :setassign
-if /i "%malcode%"=="exit" goto :ticketPrompt
-if "%malcode%"=="" goto :main
-echo Creating subtask with malcode: %malcode%
-
-:: Construct the JSON payload
-set json_data={"fields": {"project":{"key": "%project_key%"}, "parent": {"key": "%ticketNumber%"}, "summary":"Please Upgrade the %malcode% in %testset% to %month%", "issuetype": {"name":"Sub-task"}, "assignee": {"name": "%assignee%"}}}
-
-:: Save the JSON to a temporary file
-echo %json_data% > json_payload.txt
-
-:: Use curl to create the subtask
-curl -D- -u %username%:%password% -X POST -d @json_payload.txt -H "Content-Type: application/json" https://track.td.com/rest/api/2/issue/
-
-:: Cleanup
-del json_payload.txt
-call :epic_link
-goto :main
-
-:end
-echo Exiting program...
-exit /b
-
-:setassign
-set "uwbare=NAIDS29"
-set "aapare=TAE7763"
-set found=false
-
-:: Check in list 1
-echo %malcode% | findstr /i "MP AMS OPDH ADDRP" >nul && (
-    set "assignee=%aapare%"
-    goto :gotassignee
-)
-
-:: Check in list 2
-echo %malcode% | findstr /i "NAIDS29" >nul && (
-    set "assignee=%uwbare%"
-    goto :gotassignee
-)
-
-echo "TAE7763 is Piyush"
-echo "NAIDS29 is Sriram"
-set /p assignee="Enter assignee (or type 'exit' to quit): "
-if /i "%assignee%"=="exit" goto :end
-if "%assignee%"=="" goto :ticketPrompt
-
-:gotassignee
-echo Got the assignee: %assignee%
-goto :eof
-
-:epic_link
-if /i "%ticketNumber:~0,7%"=="CRPHCRD" (
-    curl -u %username%:%password% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"customfield_10006\":\"%crdfullupgradeepic%\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%
-    echo CRD epic added
-) else if /i "%ticketNumber:~0,7%"=="CRPHCOF" (
-    curl -u %username%:%password% -X PUT -H "Content-Type: application/json" -d "{\"fields\":{\"customfield_10006\":\"%coffullupgradeepic%\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%
-    echo COF epic added
+if "%choice%"=="1" (
+    call :download_to_windows
+) else if "%choice%"=="2" (
+    call :download_to_linux
 ) else (
-    echo Don't have your epic link yet
-)
-goto :eof
-
-:check
-:: Get the current status of the Jira issue
-curl -s -u %username%:%password% -X GET -H "Content-Type: application/json" https://track.td.com/rest/api/2/issue/%ticketNumber%?fields=status > current_status.json
-
-:: Extract the status
-for /f "tokens=3 delims=:," %%i in ('findstr "status" current_status.json') do set "current_status=%%i"
-set "current_status=%current_status:~1,-1%"  :: Clean up the extracted value
-
-if "%current_status%"=="" (
-    echo Error: Failed to extract the current status.
+    echo Invalid choice. Exiting.
     goto :end
 )
 
-echo Current status is: %current_status%
-del current_status.json
-goto :eof
+goto :end
 
-:transition
-:: Perform the necessary transitions based on the current status
+:download_to_windows
+:: Set up variables
+set "username=your_username"
+set "password=your_password"
+set "dataset=ftp://sftpdev:1065//'mainframe.dataset.name'"
+set "output_path=%cd%\mainframe_file.txt"  :: File will be saved in the current directory
 
-if /i "%current_status%"=="To Do" (
-    echo Moving ticket from 'To Do' to 'In Progress'...
-    call :move_to_refining
-    call :move_to_waiting_on_dependencies
-    call :move_to_ready_to_start
-    call :move_to_in_progress
-) else if /i "%current_status%"=="Refining" (
-    echo Ticket is in 'Refining', moving to 'In Progress'...
-    call :move_to_waiting_on_dependencies
-    call :move_to_ready_to_start
-    call :move_to_in_progress
-) else if /i "%current_status%"=="Waiting on Dependencies" (
-    echo Ticket is in 'Waiting on Dependencies', moving to 'In Progress'...
-    call :move_to_ready_to_start
-    call :move_to_in_progress
-) else if /i "%current_status%"=="Ready to Start" (
-    echo Ticket is in 'Ready to Start', moving to 'In Progress'...
-    call :move_to_in_progress
-) else if /i "%current_status%"=="In Progress" (
-    echo Ticket is already 'In Progress'. No transition needed.
+:: Download the file using curl
+echo Downloading file to Windows...
+curl --ssl-reqd -u %username%:%password% -B -v -o "%output_path%" %dataset%
+
+echo File downloaded to: %output_path%
+goto :end
+
+:download_to_linux
+:: Prompt for server IP
+set /p server_ip="Enter the Linux server IP: "
+
+:: Set up variables
+set "username=your_username"
+set "password=your_password"
+set "dataset=ftp://sftpdev:1065//'mainframe.dataset.name'"
+set "temp_file=%cd%\mainframe_file.txt"  :: File will be saved temporarily in the current directory
+set "linux_path=/tmp/mainframe_file.txt"
+
+:: Download the file using curl to a temporary local file
+echo Downloading file to temporary location...
+curl --ssl-reqd -u %username%:%password% -B -v -o "%temp_file%" %dataset%
+
+:: Transfer the file to the Linux server using scp
+echo Transferring file to Linux server...
+scp "%temp_file%" root@%server_ip%:/tmp
+
+if %errorlevel%==0 (
+    echo File successfully transferred to Linux server at /tmp.
 ) else (
-    echo No valid transition path for the current status: %current_status%
+    echo Failed to transfer file to Linux server.
 )
-goto :eof
 
-:move_to_refining
-echo Moving to Refining...
-curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"701\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
-goto :eof
+:: Clean up the temporary file
+del "%temp_file%"
+goto :end
 
-:move_to_waiting_on_dependencies
-echo Moving to Waiting on Dependencies...
-curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"681\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
-goto :eof
-
-:move_to_ready_to_start
-echo Moving to Ready to Start...
-curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"691\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
-goto :eof
-
-:move_to_in_progress
-echo Moving to In Progress...
-curl -u %username%:%password% -X POST -H "Content-Type: application/json" --data "{\"transition\":{\"id\":\"711\"}}" https://track.td.com/rest/api/2/issue/%ticketNumber%/transitions
-goto :eof
+:end
+echo Done.
+exit /b
