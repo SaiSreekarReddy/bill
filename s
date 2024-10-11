@@ -23,30 +23,33 @@ curl -u %username%:%password% -X GET -H "Content-Type: application/json" ^
 "%jira_url%/issue/%parent_issue_key%" ^
 > parent_issue.json
 
-:: Extract the target start and end dates (custom fields) from the JSON response
-for /F "tokens=*" %%A in ('findstr /C:"%start_date_field%" parent_issue.json') do (
+:: Read the entire JSON file into a variable
+set /p json_content=<parent_issue.json
+
+:: Extract the start date (customfield_24100)
+for /F "tokens=2 delims=:" %%A in ('echo %json_content% ^| findstr /C:"%start_date_field%"') do (
     set "start_date=%%A"
 )
-for /F "tokens=*" %%B in ('findstr /C:"%end_date_field%" parent_issue.json') do (
+
+:: Extract the end date (customfield_24101)
+for /F "tokens=2 delims=:" %%B in ('echo %json_content% ^| findstr /C:"%end_date_field%"') do (
     set "end_date=%%B"
 )
 
-:: Assuming the values are in the format: "customfield_24100": "YYYY-MM-DD", "customfield_24101": "YYYY-MM-DD"
-:: Parse the start and end dates from the JSON response
-for /F "tokens=2 delims=:," %%C in ('echo %start_date%') do (
-    set "parsed_start_date=%%C"
-)
-for /F "tokens=2 delims=:," %%D in ('echo %end_date%') do (
-    set "parsed_end_date=%%D"
-)
+:: Clean up the extracted dates (remove quotes, spaces, and any trailing commas)
+set "start_date=%start_date:"=%"
+set "start_date=%start_date: =%"
+set "end_date=%end_date:"=%"
+set "end_date=%end_date: =%"
+set "end_date=%end_date:,=%"
 
-echo Target Start Date: %parsed_start_date%
-echo Target End Date: %parsed_end_date%
+echo Target Start Date: %start_date%
+echo Target End Date: %end_date%
 
 :: Step 2: Create the subtask
 echo Creating subtask for %parent_issue_key%...
 curl -u %username%:%password% -X POST -H "Content-Type: application/json" ^
--d "{\"fields\": {\"project\": {\"key\": \"PROJECT\"}, \"parent\": {\"key\": \"%parent_issue_key%\"}, \"summary\": \"%subtask_summary%\", \"description\": \"%subtask_description%\", \"issuetype\": {\"name\": \"Sub-task\"}, \"%start_date_field%\": \"%parsed_start_date%\", \"%end_date_field%\": \"%parsed_end_date%\"}}" ^
+-d "{\"fields\": {\"project\": {\"key\": \"PROJECT\"}, \"parent\": {\"key\": \"%parent_issue_key%\"}, \"summary\": \"%subtask_summary%\", \"description\": \"%subtask_description%\", \"issuetype\": {\"name\": \"Sub-task\"}, \"%start_date_field%\": \"%start_date%\", \"%end_date_field%\": \"%end_date%\"}}" ^
 "%jira_url%/issue/"
 
 echo Subtask creation complete.
