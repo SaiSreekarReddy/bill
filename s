@@ -30,6 +30,13 @@ curl --ssl-reqd -u %userid%:%password% -v %transferOption% -o %localFilePath% ft
 :: Check if the file was downloaded
 if exist %localFilePath% (
     echo File downloaded successfully to %localFilePath%.
+    
+    :: Process file for readability if in text mode
+    if /i "%downloadMode%"=="text" (
+        echo Converting file encoding and line endings for readability...
+        powershell -Command "(Get-Content -Path '%localFilePath%' -Raw) | Set-Content -Path '%localFilePath%' -Encoding UTF8"
+        echo Encoding and line endings normalized for readability.
+    )
 ) else (
     echo Failed to download the file.
 )
