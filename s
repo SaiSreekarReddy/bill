@@ -1,44 +1,32 @@
-@echo off
-setlocal enabledelayedexpansion
+import chardet
 
-:: Set the FTP parameters
-set hostname=sftpdev
-set port=1065
-set userid=YOUR_USERNAME
-set password=YOUR_PASSWORD
-set remoteFilePath='mainframe.dataset.name'
-set localFilePath="%USERPROFILE%\Desktop\downloaded_file"
+def detect_encoding(file_path):
+    # Read the first 1024 bytes to guess encoding
+    with open(file_path, 'rb') as file:
+        raw_data = file.read(1024)
+        result = chardet.detect(raw_data)
+        encoding = result['encoding']
+        confidence = result['confidence']
+        print(f"Detected encoding: {encoding} (confidence: {confidence})")
+        return encoding
 
-:: Choose download mode
-set /p downloadMode="Enter download mode (binary or text): "
+def read_file_with_encoding(file_path, encoding):
+    try:
+        with open(file_path, 'r', encoding=encoding) as file:
+            content = file.read()
+            print("\nFile content:\n")
+            print(content)
+    except UnicodeDecodeError as e:
+        print(f"Error reading file with encoding {encoding}: {e}")
 
-:: Validate download mode and set transfer option
-if /i "%downloadMode%"=="binary" (
-    set transferOption=--ftp-method nocwd --binary
-    echo Downloading in binary mode...
-) else if /i "%downloadMode%"=="text" (
-    set transferOption=--ftp-method nocwd
-    echo Downloading in text mode...
-) else (
-    echo Invalid mode selected. Please enter "binary" or "text".
-    exit /b
-)
-
-:: FTP command using curl to download the file
-curl --ssl-reqd -u %userid%:%password% -v %transferOption% -o %localFilePath% ftp://%hostname%:%port%//%remoteFilePath%
-
-:: Check if the file was downloaded
-if exist %localFilePath% (
-    echo File downloaded successfully to %localFilePath%.
+def main():
+    file_path = input("Enter the path to your file: ")
+    encoding = detect_encoding(file_path)
     
-    :: Process file for readability if in text mode
-    if /i "%downloadMode%"=="text" (
-        echo Converting file encoding and line endings for readability...
-        powershell -Command "(Get-Content -Path '%localFilePath%' -Raw) | Set-Content -Path '%localFilePath%' -Encoding UTF8"
-        echo Encoding and line endings normalized for readability.
-    )
-) else (
-    echo Failed to download the file.
-)
+    if encoding:
+        read_file_with_encoding(file_path, encoding)
+    else:
+        print("Could not determine encoding.")
 
-endlocal
+if __name__ == "__main__":
+    main()
