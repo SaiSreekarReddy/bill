@@ -11,17 +11,33 @@ curl -u %jiraUsername%:%jiraPassword% -X GET -H "Content-Type: application/json"
 
 set customfield_24100=
 set customfield_24101=
+set capture=0
 
-for /f "usebackq tokens=*" %%i in (response.json) do (
+for /f "usebackq delims=" %%i in (response.json) do (
     set line=%%i
-    echo !line! | findstr "\"customfield_24100\"" > nul
+    rem Remove spaces at the start of the line
+    set line=!line: =!
+
+    rem Check for customfield_24100
+    echo !line! | findstr "\"customfield_24100\"" >nul
     if !errorlevel! equ 0 (
-        set customfield_24100=!line!
+        set capture=1
     )
 
-    echo !line! | findstr "\"customfield_24101\"" > nul
+    rem Check for customfield_24101
+    echo !line! | findstr "\"customfield_24101\"" >nul
     if !errorlevel! equ 0 (
-        set customfield_24101=!line!
+        set capture=2
+    )
+
+    if !capture! equ 1 (
+        set "customfield_24100=!line!"
+        set capture=0
+    )
+
+    if !capture! equ 2 (
+        set "customfield_24101=!line!"
+        set capture=0
     )
 )
 
