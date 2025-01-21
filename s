@@ -1,44 +1,53 @@
-import charset_normalizer
-import os
+#!/bin/bash
 
-def detect_encoding(file_path):
-    with open(file_path, 'rb') as file:
-        raw_data = file.read()
-        result = charset_normalizer.detect(raw_data)
-        encoding = result.get('encoding')
-        confidence = result.get('confidence')
-        print(f"Detected encoding: {encoding} (confidence: {confidence})")
-        return encoding if confidence > 0.5 else None
+# Retrieve server IPs from the Jenkins multi-line string parameter
+read -r -d '' SERVERS << EOM
+server_ip_1
+server_ip_2
+server_ip_3
+EOM
 
-def read_and_save_as_utf8(file_path, encoding):
-    try:
-        # Read file with detected encoding
-        with open(file_path, 'r', encoding=encoding) as file:
-            content = file.read()
+# Split server IPs into an array
+IFS=$'\n' read -d '' -r -a SERVER_LIST <<< "$SERVERS"
 
-        # Re-save file as UTF-8
-        utf8_path = f"{os.path.splitext(file_path)[0]}_utf8.txt"
-        with open(utf8_path, 'w', encoding='utf-8') as utf8_file:
-            utf8_file.write(content)
+# Loop through each server IP
+for SERVER in "${SERVER_LIST[@]}"; do
+    echo "Processing server: $SERVER"
+
+    # Check if the server is accessible
+    if ping -c 1 -W 1 "$SERVER" > /dev/null 2>&1; then
+        echo "Server $SERVER is reachable."
+
+        # Fetch the application names from the directory
+        APP_PATH="/opt/sa"
+        echo "Retrieving applications from $APP_PATH on $SERVER..."
         
-        print(f"File re-saved in UTF-8 format at: {utf8_path}")
-        return utf8_path
-    except UnicodeDecodeError as e:
-        print(f"Error reading file with encoding {encoding}: {e}")
-        return None
+        # Use SSH to list application directories
+        APP_NAMES=$(ssh -o StrictHostKeyChecking=no "$SERVER" "ls $APP_PATH 2>/dev/null")
 
-def main():
-    file_path = input("Enter the path to your file: ")
-    encoding = detect_encoding(file_path)
-    
-    if encoding:
-        utf8_path = read_and_save_as_utf8(file_path, encoding)
-        if utf8_path:
-            print("\nFile successfully converted to UTF-8.")
-        else:
-            print("Failed to re-save the file in UTF-8.")
-    else:
-        print("Could not determine encoding with sufficient confidence.")
+        if [ -n "$APP_NAMES" ]; then
+            echo "Applications on $SERVER:"
+            echo "$APP_NAMES"
 
-if __name__ == "__main__":
-    main()
+            # Check each application's status
+            for APP in $APP_NAMES; do
+                echo "Checking status of application: $APP"
+
+                # Define a command to check the application's status
+                # Replace `your_status_check_command` with the actual command to check the status
+                STATUS=$(ssh -o StrictHostKeyChecking=no "$SERVER" "ps -ef | grep $APP | grep -v grep")
+
+                if [ -n "$STATUS" ]; then
+                    echo "Application $APP is ACTIVE on $SERVER."
+                else
+                    echo "Application $APP is INACTIVE on $SERVER."
+                fi
+            done
+        else
+            echo "No applications found in $APP_PATH on $SERVER."
+        fi
+    else
+        echo "Server $SERVER is not reachable. Skipping."
+    fi
+    echo "---------------------------------"
+done
