@@ -1,53 +1,28 @@
 #!/bin/bash
 
-# Retrieve server IPs from the Jenkins multi-line string parameter
-read -r -d '' SERVERS << EOM
-server_ip_1
-server_ip_2
-server_ip_3
-EOM
+# Define the list of servers
+servers=("server1" "server2" "server3")
 
-# Split server IPs into an array
-IFS=$'\n' read -d '' -r -a SERVER_LIST <<< "$SERVERS"
+# SSH credentials
+user="your_ssh_user"
+password="your_ssh_password" # Optional if SSH keys are used
 
-# Loop through each server IP
-for SERVER in "${SERVER_LIST[@]}"; do
-    echo "Processing server: $SERVER"
+# Loop through each server
+for server in "${servers[@]}"; do
+    echo "Checking server: $server"
 
-    # Check if the server is accessible
-    if ping -c 1 -W 1 "$SERVER" > /dev/null 2>&1; then
-        echo "Server $SERVER is reachable."
-
-        # Fetch the application names from the directory
-        APP_PATH="/opt/sa"
-        echo "Retrieving applications from $APP_PATH on $SERVER..."
-        
-        # Use SSH to list application directories
-        APP_NAMES=$(ssh -o StrictHostKeyChecking=no "$SERVER" "ls $APP_PATH 2>/dev/null")
-
-        if [ -n "$APP_NAMES" ]; then
-            echo "Applications on $SERVER:"
-            echo "$APP_NAMES"
-
-            # Check each application's status
-            for APP in $APP_NAMES; do
-                echo "Checking status of application: $APP"
-
-                # Define a command to check the application's status
-                # Replace `your_status_check_command` with the actual command to check the status
-                STATUS=$(ssh -o StrictHostKeyChecking=no "$SERVER" "ps -ef | grep $APP | grep -v grep")
-
-                if [ -n "$STATUS" ]; then
-                    echo "Application $APP is ACTIVE on $SERVER."
-                else
-                    echo "Application $APP is INACTIVE on $SERVER."
-                fi
-            done
+    # Connect to the server and check for running processes
+    sshpass -p "$password" ssh -o StrictHostKeyChecking=no "$user@$server" bash -c "'
+        if ps -ef | grep -q [D]eploymentManager; then
+            echo \"$server is a Deployment Management Server\"
+        elif ps -ef | grep -q [h]ttpd; then
+            echo \"$server is an IHS Node\"
+        elif ps -ef | grep -q [A]ppServer; then
+            echo \"$server is an App Node\"
         else
-            echo "No applications found in $APP_PATH on $SERVER."
+            echo \"$server type is unknown\"
         fi
-    else
-        echo "Server $SERVER is not reachable. Skipping."
-    fi
-    echo "---------------------------------"
+    '"
 done
+
+echo "All servers checked."
