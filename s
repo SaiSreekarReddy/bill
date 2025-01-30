@@ -14,6 +14,21 @@ LOG_FILE="servers_down.txt"
 
 DOWN_COUNT=0
 
+# Function to log details
+log_to_file() {
+    local server="$1"
+    echo "--------------------------------------------------" >> "$LOG_FILE"
+    echo "Server: $server" >> "$LOG_FILE"
+    echo "Timestamp: $(date)" >> "$LOG_FILE"
+    echo "Status: Application is down!" >> "$LOG_FILE"
+    echo "Last 10 log entries from $server:" >> "$LOG_FILE"
+    
+    # Fetch last 10 log entries
+    ssh user@"$server" "tail -n 10 /var/log/your-app.log" >> "$LOG_FILE" 2>&1
+
+    echo "--------------------------------------------------" >> "$LOG_FILE"
+}
+
 echo "Checking servers..." | tee -a "$LOG_FILE"
 
 for SERVER in "${SERVERS[@]}"; do
@@ -26,11 +41,8 @@ for SERVER in "${SERVERS[@]}"; do
         echo "$SERVER: Application is down!" | tee -a "$LOG_FILE"
         ((DOWN_COUNT++))
 
-        # Get last 10 log entries (adjust path accordingly)
-        echo "Fetching logs from $SERVER..." | tee -a "$LOG_FILE"
-        ssh user@"$SERVER" "tail -n 10 /var/log/your-app.log" >> "$LOG_FILE" 2>&1
-
-        echo "--------------------------------------------------" >> "$LOG_FILE"
+        # Call function to log details
+        log_to_file "$SERVER"
     fi
 done
 
