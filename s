@@ -3,7 +3,7 @@
 # Set Confluence credentials
 CONFLUENCE_USERNAME="your_username"
 CONFLUENCE_PASSWORD="your_password"
-CONFLUENCE_URL="https://your-confluence-instance.atlassian.net"
+CONFLUENCE_URL="https://your-domain.atlassian.net"
 
 # Read Confluence Page ID from user input
 read -p "Enter the Confluence Page ID: " PAGE_ID
@@ -14,21 +14,25 @@ PAGE_RESPONSE=$(curl -s -u "$CONFLUENCE_USERNAME:$CONFLUENCE_PASSWORD" -X GET \
   "$CONFLUENCE_URL/wiki/rest/api/content/$PAGE_ID?expand=body.storage")
 
 # Check if response is valid
-if [[ -z "$PAGE_RESPONSE" ]]; then
-    echo "Failed to retrieve Confluence page. Please check the URL and credentials."
+if [[ -z "$PAGE_RESPONSE" || "$PAGE_RESPONSE" == "null" ]]; then
+    echo "Error: Failed to retrieve page content. Please check the Page ID and credentials."
     exit 1
 fi
 
 # Extract body content (HTML)
 PAGE_BODY=$(echo "$PAGE_RESPONSE" | jq -r '.body.storage.value')
 
-# Extract malcodes (assuming they follow the pattern "MALCODE-1234")
-MALCODES=$(echo "$PAGE_BODY" | grep -oE 'MALCODE-[0-9]+' | sort -u)
+# Extract only the first column from the Confluence table
+FIRST_COLUMN=$(echo "$PAGE_BODY" | grep -oP '(?<=<tr><td>).*?(?=</td>)')
 
-# Display results
-if [[ -z "$MALCODES" ]]; then
-    echo "No malcodes found on Confluence page $PAGE_ID."
-else
-    echo "Malcodes found on Confluence page $PAGE_ID:"
-    echo "$MALCODES"
+# Verify if any entries were found
+if [[ -z "$FIRST_COLUMN" ]]; then
+    echo "No table data found on Confluence page $PAGE_ID."
+    exit 1
 fi
+
+# Loop through each entry and echo it
+echo "Extracted Entries from the First Column:"
+echo "$FIRST_COLUMN" | while IFS= read -r line; do
+    echo "$line"
+done
