@@ -8,9 +8,9 @@ CONFLUENCE_URL="https://your-domain.atlassian.net"
 # Read Confluence Page ID
 read -p "Enter the Confluence Page ID: " PAGE_ID
 
-# Temporary file to store the JSON response
+# Temporary files
 JSON_FILE="confluence_page.json"
-TABLE_FILE="confluence_table.html"
+HTML_FILE="decoded_table.html"
 
 # Fetch Confluence page content and save JSON response
 curl -s -u "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" -X GET \
@@ -23,17 +23,17 @@ if [[ ! -s "$JSON_FILE" ]]; then
     exit 1
 fi
 
-# Extract the "body.storage.value" field and save to a new file (HTML content inside JSON)
-jq -r '.body.storage.value' "$JSON_FILE" > "$TABLE_FILE"
+# Extract and decode HTML content from JSON
+jq -r '.body.storage.value' "$JSON_FILE" | python3 -c "import sys, html; print(html.unescape(sys.stdin.read()))" > "$HTML_FILE"
 
-# Check if extracted table content exists
-if [[ ! -s "$TABLE_FILE" ]]; then
+# Check if extracted HTML content exists
+if [[ ! -s "$HTML_FILE" ]]; then
     echo "Error: No table content found in Confluence page."
     exit 1
 fi
 
-# Extract only the first column from the Confluence table (table rows <tr>, first column <td>)
-FIRST_COLUMN=$(grep -oP '(?<=<tr><td>).*?(?=</td>)' "$TABLE_FILE")
+# Extract only the first column from the Confluence table
+FIRST_COLUMN=$(grep -oP '(?<=<tr><td>).*?(?=</td>)' "$HTML_FILE")
 
 # Verify if any entries were found
 if [[ -z "$FIRST_COLUMN" ]]; then
@@ -48,4 +48,4 @@ echo "$FIRST_COLUMN" | while IFS= read -r line; do
 done
 
 # Cleanup temporary files
-rm -f "$JSON_FILE" "$TABLE_FILE"
+rm -f "$JSON_FILE" "$HTML_FILE"
