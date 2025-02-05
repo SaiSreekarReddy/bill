@@ -10,18 +10,18 @@ read -p "Enter the Confluence Page ID: " PAGE_ID
 
 # Temporary files
 JSON_FILE="confluence_page.json"
-HTML_FILE="decoded_page.html"
+DECODED_FILE="decoded_page.html"
 
 # Fetch Confluence page content and save JSON response
 curl -s -u "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" -X GET \
   -H "Content-Type: application/json" \
   "$CONFLUENCE_URL/rest/api/content/$PAGE_ID?expand=body.storage" > "$JSON_FILE"
 
-# Extract and decode HTML content from JSON
-jq -r '.body.storage.value' "$JSON_FILE" | python3 -c "import sys, html; print(html.unescape(sys.stdin.read()))" > "$HTML_FILE"
+# Decode JSON-escaped HTML content
+jq -r '.body.storage.value' "$JSON_FILE" | python3 -c "import sys, html; print(html.unescape(sys.stdin.read()))" > "$DECODED_FILE"
 
-# Extract malcodes (values between ">malcode<")
-MALCODES=$(grep -oP '(?<=\u003E)[Mm][Aa][Ll][Cc][Oo][Dd][Ee]-[0-9]+' "$HTML_FILE" | sort -u)
+# Extract malcodes (values between `>MALCODE-####<`)
+MALCODES=$(grep -oE '>MALCODE-[0-9]+' "$DECODED_FILE" | sed 's/>//g' | sort -u)
 
 # Verify if any malcodes were found
 if [[ -z "$MALCODES" ]]; then
@@ -36,4 +36,4 @@ echo "$MALCODES" | while IFS= read -r line; do
 done
 
 # Cleanup temporary files
-rm -f "$JSON_FILE" "$HTML_FILE"
+rm -f "$JSON_FILE" "$DECODED_FILE"
