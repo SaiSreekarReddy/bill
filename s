@@ -1,27 +1,40 @@
 #!/usr/bin/env bash
 
-# Script: extract_code_blocks.sh
-# Purpose:
-#   1. Fetch a Confluence page as JSON or text.
-#   2. Join everything into one line.
-#   3. Split on the delimiter '">info</gh>'.
-#   4. Print each chunk that appears between those delimiters on its own line.
+# Example usage: ./extract_between.sh
 
-# 1. Confluence REST API URL (example):
+# 1. Confluence (or other) URL:
 CONFLUENCE_URL="https://your.confluence.site/rest/api/content/12345?expand=body.storage"
 
-# 2. Fetch the data.
+# 2. Fetch content silently:
 json_data="$(curl -s "$CONFLUENCE_URL")"
 
-# 3. Process with awk:
-#    - 'tr '\n' ' '' merges lines so our delimiter match can span lines.
-#    - The '-F "">info</gh>"' sets that delimiter.
-#    - We skip $1 (everything before the first delimiter).
-#    - Print each subsequent field ($2, $3, ...) on its own line.
-echo "$json_data" \
-  | tr '\n' ' ' \
-  | awk -F '">info</gh>' '{
-      for (i = 2; i <= NF; i++) {
-          print $i
-      }
-    }'
+# 3. Pass the fetched data to awk for extraction:
+#
+#    The regex /">([^<]+)<\/gh>/ means:
+#      - literal characters `">`
+#      - then capture one or more chars that are NOT '<' ( [^<]+ )
+#      - then literal `</gh>`
+#
+#    match($0, /">([^<]+)<\/gh>/) finds the first match in $0;
+#    substr(..., RSTART+2, RLENGTH-7) extracts just the capturing group.
+#
+#    We then remove that matched portion from the current line ($0)
+#    so that we can find subsequent occurrences.
+
+echo "$json_data" | awk '
+{
+  while (match($0, /">([^<]+)<\/gh>/)) {
+    # Entire matched text is something like:  `">some_code</gh>`
+    # That’s 2 chars for `">`, plus the captured text, plus 5 chars for `</gh>` = 7 extra chars total.
+    #
+    # So the substring for the captured group starts at RSTART+2 and
+    # has length RLENGTH-7:
+    extracted = substr($0, RSTART + 2, RLENGTH - 7)
+    print extracted
+
+    # Remove the matched portion from the current line, so we
+    # can find the next match (if any):
+    $0 = substr($0, RSTART + RLENGTH)
+  }
+}
+'
