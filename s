@@ -10,30 +10,25 @@ read -p "Enter the Confluence Page ID: " PAGE_ID
 
 # Temporary files
 JSON_FILE="confluence_page.json"
-DECODED_FILE="decoded_page.html"
+ENCODED_VALUES_FILE="encoded_values.txt"
 
 # Fetch Confluence page content and save JSON response
 curl -s -u "$CONFLUENCE_USERNAME:$CONFLUENCE_API_TOKEN" -X GET \
   -H "Content-Type: application/json" \
   "$CONFLUENCE_URL/rest/api/content/$PAGE_ID?expand=body.storage" > "$JSON_FILE"
 
-# Decode JSON-escaped HTML content
-jq -r '.body.storage.value' "$JSON_FILE" | python3 -c "import sys, html; print(html.unescape(sys.stdin.read()))" > "$DECODED_FILE"
+# Extract all values enclosed between \u003E (>) and \u003C (<)
+grep -oP '(?<=\\u003E)[^\\u003C]+' "$JSON_FILE" > "$ENCODED_VALUES_FILE"
 
-# Extract malcodes (values between `>MALCODE-####<`)
-MALCODES=$(grep -oE '>MALCODE-[0-9]+' "$DECODED_FILE" | sed 's/>//g' | sort -u)
-
-# Verify if any malcodes were found
-if [[ -z "$MALCODES" ]]; then
-    echo "No malcodes found on Confluence page $PAGE_ID."
+# Check if we extracted anything
+if [[ ! -s "$ENCODED_VALUES_FILE" ]]; then
+    echo "No encoded values found on Confluence page $PAGE_ID."
     exit 1
 fi
 
-# Loop through each extracted malcode and echo it
-echo "Extracted Malcodes:"
-echo "$MALCODES" | while IFS= read -r line; do
-    echo "$line"
-done
+# Print extracted values
+echo "Extracted Encoded Values:"
+cat "$ENCODED_VALUES_FILE"
 
-# Cleanup temporary files
-rm -f "$JSON_FILE" "$DECODED_FILE"
+# Cleanup
+rm -f "$JSON_FILE"
