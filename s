@@ -1,29 +1,34 @@
 #!/bin/bash
 
-# Set your Jira credentials
-JIRA_USERNAME="your_username"
-JIRA_PASSWORD="your_password"
-JIRA_URL="https://track.td.com"
+# Set Confluence credentials
+CONFLUENCE_USERNAME="your_username"
+CONFLUENCE_PASSWORD="your_password"
+CONFLUENCE_URL="https://your-confluence-instance.atlassian.net"
 
-# Read Jira Ticket ID from user input
-read -p "Enter the Jira ticket ID: " JIRA_TICKET
+# Read Confluence Page ID from user input
+read -p "Enter the Confluence Page ID: " PAGE_ID
 
-# Fetch issue details from Jira
-JIRA_RESPONSE=$(curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" -X GET -H "Content-Type: application/json" "$JIRA_URL/rest/api/2/issue/$JIRA_TICKET")
+# Fetch Confluence page content (HTML format)
+PAGE_RESPONSE=$(curl -s -u "$CONFLUENCE_USERNAME:$CONFLUENCE_PASSWORD" -X GET \
+  -H "Content-Type: application/json" \
+  "$CONFLUENCE_URL/wiki/rest/api/content/$PAGE_ID?expand=body.storage")
 
-# Check if the response is valid
-if [[ -z "$JIRA_RESPONSE" ]]; then
-    echo "Failed to retrieve ticket details. Please check the Jira URL and credentials."
+# Check if response is valid
+if [[ -z "$PAGE_RESPONSE" ]]; then
+    echo "Failed to retrieve Confluence page. Please check the URL and credentials."
     exit 1
 fi
 
-# Extract "Relates To" issue links using jq
-RELATED_TICKETS=$(echo "$JIRA_RESPONSE" | jq -r '.fields.issuelinks[] | select(.type.name=="Relates") | .outwardIssue.key, .inwardIssue.key' | sort -u)
+# Extract body content (HTML)
+PAGE_BODY=$(echo "$PAGE_RESPONSE" | jq -r '.body.storage.value')
 
-# Check if any related tickets were found
-if [[ -z "$RELATED_TICKETS" ]]; then
-    echo "No related tickets found for $JIRA_TICKET."
+# Extract malcodes (assuming they follow the pattern "MALCODE-1234")
+MALCODES=$(echo "$PAGE_BODY" | grep -oE 'MALCODE-[0-9]+' | sort -u)
+
+# Display results
+if [[ -z "$MALCODES" ]]; then
+    echo "No malcodes found on Confluence page $PAGE_ID."
 else
-    echo "Related Jira Tickets for $JIRA_TICKET:"
-    echo "$RELATED_TICKETS"
+    echo "Malcodes found on Confluence page $PAGE_ID:"
+    echo "$MALCODES"
 fi
