@@ -1,47 +1,29 @@
-@echo off
-setlocal enabledelayedexpansion
+#!/bin/bash
 
-:: Set Jira credentials and URL
-set "USERNAME=your_username"
-set "PASSWORD=your_password_or_api_token"
-set "JIRA_BASE_URL=https://yourcompany.atlassian.net"
-set "ISSUE_KEY=PROJ-123"
+# Set your Jira credentials
+JIRA_USERNAME="your_username"
+JIRA_PASSWORD="your_password"
+JIRA_URL="https://track.td.com"
 
-:: Call Jira API to fetch issue details (summary only)
-curl -s -u "%USERNAME%:%PASSWORD%" -X GET "%JIRA_BASE_URL%/rest/api/2/issue/%ISSUE_KEY%?fields=summary" > response.json
+# Read Jira Ticket ID from user input
+read -p "Enter the Jira ticket ID: " JIRA_TICKET
 
-:: Extract the summary from the JSON response (manually parsing without jq)
-for /f "tokens=*" %%A in ('findstr /R /C:"\"summary\":" response.json') do (
-    set "SUMMARY=%%A"
-)
+# Fetch issue details from Jira
+JIRA_RESPONSE=$(curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" -X GET -H "Content-Type: application/json" "$JIRA_URL/rest/api/2/issue/$JIRA_TICKET")
 
-:: Clean up JSON formatting to extract just the summary text
-set "SUMMARY=%SUMMARY: \"summary\"=:%"
-set "SUMMARY=%SUMMARY:,=%"
-set "SUMMARY=%SUMMARY: \"=%"
-set "SUMMARY=%SUMMARY:\" =%"
-set "SUMMARY=%SUMMARY: }=%"
-set "SUMMARY=%SUMMARY: }=%"
-set "SUMMARY=%SUMMARY:"=%"
+# Check if the response is valid
+if [[ -z "$JIRA_RESPONSE" ]]; then
+    echo "Failed to retrieve ticket details. Please check the Jira URL and credentials."
+    exit 1
+fi
 
-:: Output the cleaned summary
-echo Full Summary: "%SUMMARY%"
+# Extract "Relates To" issue links using jq
+RELATED_TICKETS=$(echo "$JIRA_RESPONSE" | jq -r '.fields.issuelinks[] | select(.type.name=="Relates") | .outwardIssue.key, .inwardIssue.key' | sort -u)
 
-:: Split summary into individual words
-set i=0
-for %%B in (%SUMMARY%) do (
-    set /a i+=1
-    set "WORD!i!=%%B"
-)
-
-:: Display extracted words as variables
-echo.
-echo Extracted Words:
-for /L %%X in (1,1,%i%) do (
-    echo WORD%%X=!WORD%%X!
-)
-
-:: Clean up response file
-del response.json
-
-endlocal
+# Check if any related tickets were found
+if [[ -z "$RELATED_TICKETS" ]]; then
+    echo "No related tickets found for $JIRA_TICKET."
+else
+    echo "Related Jira Tickets for $JIRA_TICKET:"
+    echo "$RELATED_TICKETS"
+fi
