@@ -2,13 +2,13 @@
 
 # Define the keyword to search in JSON
 SEARCH_KEYWORD="CRGHYT"
-EXEMPT_TICKETS="CRHIRT-638"  # Space-separated list of exempt tickets
+EXEMPT_TICKETS="CRHIRT-638 CRGHYT-999"  # Space-separated list of exempt tickets
 
-# Declare an associative array to store unique malcodes
+# Declare an output file for malcodes
 MALCODES_FILE="/tmp/malcodes.txt"
-> "$MALCODES_FILE"  # Empty the file
+> "$MALCODES_FILE"  # Clear the file before running
 
-# JSON file input (Replace with the actual path)
+# JSON file input (Replace with the actual path in Jenkins workspace)
 JSON_FILE="jira_data.json"
 
 # Function to check if a ticket is exempt
@@ -28,7 +28,7 @@ awk -v search="$SEARCH_KEYWORD" '
             ticket = substr($0, RSTART, RLENGTH)
             $0 = substr($0, RSTART + RLENGTH)  # Move to next match
 
-            # Extract the summary (assumed on the same line or next)
+            # Extract the summary
             if (match($0, /"summary": ?"([^"]+)"/, arr)) {
                 summary = arr[1]
                 print ticket "|" summary
@@ -36,37 +36,23 @@ awk -v search="$SEARCH_KEYWORD" '
         }
     }
 ' "$JSON_FILE" | while IFS="|" read -r ticket summary; do
-    # Check if the ticket should be exempted
+    # Skip exempt tickets
     is_exempt "$ticket" && continue
 
-    # Extract words from the summary and add to malcodes file
+    # Extract words and store them as unique malcodes
     for word in $summary; do
-        echo "$word" >> "$MALCODES_FILE"
+        # Convert the first letter to uppercase to match expected output
+        formatted_word="$(echo "$word" | awk '{print toupper(substr($0,1,1)) tolower(substr($0,2))}')"
+        echo "$formatted_word" >> "$MALCODES_FILE"
     done
 done
 
 # Remove duplicates and store unique malcodes
 sort -u "$MALCODES_FILE" > "${MALCODES_FILE}.tmp" && mv "${MALCODES_FILE}.tmp" "$MALCODES_FILE"
 
-# Display unique malcodes
+# Display unique malcodes (for Jenkins console output)
 echo "Unique Malcodes Found:"
 cat "$MALCODES_FILE"
 
-# Function to dynamically add more exemptions
-add_exemption() {
-    echo "Enter the ticket number to exempt:"
-    read -r new_ticket
-    EXEMPT_TICKETS="$EXEMPT_TICKETS $new_ticket"
-    echo "Updated Exempt List: $EXEMPT_TICKETS"
-}
-
-# Loop for adding exemptions dynamically
-while true; do
-    echo "Do you want to add an exemption? (y/n)"
-    read -r choice
-    case "$choice" in
-        [yY]*) add_exemption ;;
-        [nN]*) break ;;
-        *) echo "Invalid input" ;;
-    esac
-done
+# Exit successfully
+exit 0
