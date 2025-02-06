@@ -16,9 +16,10 @@ get_related_tickets() {
   related_tickets=$(curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X GET "${JIRA_SEARCH_URL}" \
                     -H "Content-Type: application/json" \
                     --data "{\"jql\": \"key ~ '${input_ticket:0:7}'\", \"fields\": [\"key\"]}" | jq -r '.issues[].key')
-  
-  echo "$input_ticket"  # Include input ticket itself
-  echo "$related_tickets" | head -4  # Get 4 related tickets
+
+  # Ensure we always have at least 5 tickets (including the input ticket itself)
+  echo "$input_ticket"  
+  echo "$related_tickets" | head -4  # Get 4 more related tickets (if available)
 }
 
 # Function to fetch summaries in bulk
@@ -85,13 +86,24 @@ read -p "Enter a Jira ticket number: " input_ticket
 # Get related tickets (including the input ticket)
 related_tickets=($(get_related_tickets "$input_ticket"))
 
-# Assign MalCodes based on related ticket order
+# Check if we have at least 5 related tickets
+if [ "${#related_tickets[@]}" -lt 5 ]; then
+  echo "Error: Less than 5 related tickets found. Exiting."
+  exit 1
+fi
+
+# Map related tickets to MalCodes dynamically
 declare -A ticket_malcode_mapping
-ticket_malcode_mapping["${related_tickets[0]}"]="${malcodes1[@]}"  # Input ticket → Group 1
-ticket_malcode_mapping["${related_tickets[1]}"]="${malcodes2[@]}"  # Related 1 → Group 2
-ticket_malcode_mapping["${related_tickets[2]}"]="${malcodes3[@]}"  # Related 2 → Group 3
-ticket_malcode_mapping["${related_tickets[3]}"]="${malcodes4[@]}"  # Related 3 → Group 4
-ticket_malcode_mapping["${related_tickets[4]}"]="${malcodes5[@]}"  # Related 4 → Group 5
+group_malcodes=("malcodes1" "malcodes2" "malcodes3" "malcodes4" "malcodes5")
+
+for i in {0..4}; do
+  ticket="${related_tickets[$i]}"
+  malcode_group="${group_malcodes[$i]}"
+
+  if [ -n "$ticket" ]; then
+    eval "ticket_malcode_mapping[\"$ticket\"]=\"\${${malcode_group}[@]}\""
+  fi
+done
 
 # Create subtasks for each related ticket
 for ticket in "${!ticket_malcode_mapping[@]}"; do
