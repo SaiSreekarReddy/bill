@@ -7,70 +7,98 @@ CONFLUENCE_URL="https://confluence_base_url/rest/API/content/pageid?expand=body.
 
 JIRA_USER="jira_user"
 JIRA_PASS="jira_pass"
-JIRA_SEARCH_URL="https://your.jira.instance/rest/api/2/search"  # Bulk search API
+JIRA_SEARCH_URL="https://your.jira.instance/rest/api/2/search"
+JIRA_CREATE_URL="https://your.jira.instance/rest/api/2/issue"
 
-# 1) Retrieve Confluence page content
-response=$(curl -s -u "${USER}:${PASS}" -X GET \
-         -H "Content-Type: application/json" "${CONFLUENCE_URL}")
+# Function to get related tickets based on an input ticket number
+get_related_tickets() {
+  local input_ticket="$1"
+  related_tickets=$(curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X GET "${JIRA_SEARCH_URL}" \
+                    -H "Content-Type: application/json" \
+                    --data "{\"jql\": \"key ~ '${input_ticket:0:7}'\", \"fields\": [\"key\"]}" | jq -r '.issues[].key')
+  
+  echo "$input_ticket"  # Include input ticket itself
+  echo "$related_tickets" | head -4  # Get 4 related tickets
+}
 
-# 2) Extract ticket numbers (improved regex and grouping)
-ticket_numbers=$(echo "${response}" | grep -oE '>CRHP[^-]*-[0-9]{4,5}<' | sed 's/^>.*<$/\1/')
-
-# Group tickets into arrays (more efficient)
-declare -A ticket_groups  # Associative array for flexible grouping
-
-group_index=0
-for ticket in $ticket_numbers; do
-  group_name="group$((group_index % 5))"  # Cycle through 5 groups
-  ticket_groups[$group_name]+="$ticket "
-  group_index=$((group_index + 1))
-done
-
-
-# Function to process ticket groups in bulk (improved error handling)
-process_tickets() {
-  local group_name="$1"
-  local tickets="${ticket_groups[$group_name]}"
-  local array_name="$2"  # Receive the array name as a string
+# Function to fetch summaries in bulk
+fetch_summaries() {
+  local tickets="$1"
+  local -n malcodes_array=$2  # Pass array by reference
 
   if [ -z "$tickets" ]; then
-    return  # Skip if no tickets in this group
+    return
   fi
 
-  # Convert space-separated tickets into a Jira JQL query format
-  ticket_list=$(echo "$tickets" | tr ' ' ',' | sed 's/,$//')
+  ticket_list=$(echo "$tickets" | tr '\n' ',' | sed 's/,$//')
 
-  # 3) Perform a bulk search on Jira (handle potential errors)
   jira_response=$(curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X POST "${JIRA_SEARCH_URL}" \
                    -H "Content-Type: application/json" \
                    --data "{\"jql\": \"key in ($ticket_list)\", \"fields\": [\"summary\"]}")
 
-  if [[ $(echo "$jira_response" | jq -r '.errorMessages') ]]; then  # Check for Jira API errors
-      echo "Error fetching Jira data for $group_name: $(echo "$jira_response" | jq -r '.errorMessages')" >&2 # Print error to stderr
-      return 1 # Return error code
-  fi
-
-    # 4) Extract summaries and their second words (MalCodes)
   while IFS= read -r summary; do
-    malcode=$(echo "$summary" | awk '{print $2}')  # Extract the second word
-    eval "${array_name}+=('\$malcode')"  # Use eval for indirect expansion (fixed!)
+    malcode=$(echo "$summary" | awk '{print $2}')
+    malcodes_array+=("$malcode")
   done < <(echo "$jira_response" | jq -r '.issues[].fields.summary')
 }
 
+# Function to create Jira subtasks
+create_subtask() {
+  local parent_ticket="$1"
+  local summary="$2"
+  local description="Subtask created for $parent_ticket with MalCode $summary"
 
-# Initialize arrays for MalCodes (dynamically)
-declare -A malcodes_arrays
+  curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X POST "${JIRA_CREATE_URL}" \
+       -H "Content-Type: application/json" \
+       --data "{
+          \"fields\": {
+            \"project\": { \"key\": \"YOUR_PROJECT_KEY\" },
+            \"parent\": { \"key\": \"$parent_ticket\" },
+            \"summary\": \"$summary\",
+            \"description\": \"$description\",
+            \"issuetype\": { \"name\": \"Sub-task\" }
+          }
+        }"
+}
 
-# Process each group of tickets (dynamically)
-for group_name in "${!ticket_groups[@]}"; do
-  declare -a "malcodes_${group_name}"
-  process_tickets "$group_name" "malcodes_${group_name}"
-  malcodes_arrays[$group_name]="malcodes_${group_name}" # Store array name
+# Fetch ticket numbers from Confluence content
+response=$(curl -s -u "${USER}:${PASS}" -X GET -H "Content-Type: application/json" "${CONFLUENCE_URL}")
+matches1=$(echo "$response" | grep -o '>CRHP[^-]*-[0-9]\{4,5\}<' | sed 's/^>.*<$/\1/' | awk 'NR%5==1')
+matches2=$(echo "$response" | grep -o '>CRHP[^-]*-[0-9]\{4,5\}<' | sed 's/^>.*<$/\1/' | awk 'NR%5==2')
+matches3=$(echo "$response" | grep -o '>CRHP[^-]*-[0-9]\{4,5\}<' | sed 's/^>.*<$/\1/' | awk 'NR%5==3')
+matches4=$(echo "$response" | grep -o '>CRHP[^-]*-[0-9]\{4,5\}<' | sed 's/^>.*<$/\1/' | awk 'NR%5==4')
+matches5=$(echo "$response" | grep -o '>CRHP[^-]*-[0-9]\{4,5\}<' | sed 's/^>.*<$/\1/' | awk 'NR%5==0')
+
+# Initialize arrays for MalCodes
+declare -a malcodes1 malcodes2 malcodes3 malcodes4 malcodes5
+
+# Fetch MalCodes from Jira in bulk
+fetch_summaries "$matches1" malcodes1
+fetch_summaries "$matches2" malcodes2
+fetch_summaries "$matches3" malcodes3
+fetch_summaries "$matches4" malcodes4
+fetch_summaries "$matches5" malcodes5
+
+# Ask for an input ticket
+read -p "Enter a Jira ticket number: " input_ticket
+
+# Get related tickets (including the input ticket)
+related_tickets=($(get_related_tickets "$input_ticket"))
+
+# Assign MalCodes based on related ticket order
+declare -A ticket_malcode_mapping
+ticket_malcode_mapping["${related_tickets[0]}"]="${malcodes1[@]}"  # Input ticket → Group 1
+ticket_malcode_mapping["${related_tickets[1]}"]="${malcodes2[@]}"  # Related 1 → Group 2
+ticket_malcode_mapping["${related_tickets[2]}"]="${malcodes3[@]}"  # Related 2 → Group 3
+ticket_malcode_mapping["${related_tickets[3]}"]="${malcodes4[@]}"  # Related 3 → Group 4
+ticket_malcode_mapping["${related_tickets[4]}"]="${malcodes5[@]}"  # Related 4 → Group 5
+
+# Create subtasks for each related ticket
+for ticket in "${!ticket_malcode_mapping[@]}"; do
+  for malcode in ${ticket_malcode_mapping["$ticket"]}; do
+    echo "Creating subtask for $ticket with MalCode: $malcode"
+    create_subtask "$ticket" "$malcode"
+  done
 done
 
-# 5) Display Results (dynamically)
-for group_name in "${!ticket_groups[@]}"; do
-  echo "MalCodes for ${group_name}:"
-  eval printf "%s\\n" "\"\${${malcodes_arrays[$group_name]}[@]}\"" # Indirect variable expansion
-done
-
+echo "Subtasks successfully created!"
