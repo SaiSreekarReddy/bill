@@ -1,11 +1,21 @@
 #!/bin/bash
 
-jira_data=$(curl -s "YOUR_JIRA_URL" | sed -n 's/["\[\]]//gp' | tr ',' '\n') # Example: Extracts comma-separated values
+jira_data=$(curl -s "YOUR_JIRA_URL" | jq -r '.key,.fields.issuelinks[].outwardIssue.key,.fields.issuelinks[].inwardIssue.key' | grep -v null)
 
-issue_summaries=()
+related_issues=()
 
-while IFS= read -r summary; do
-  issue_summaries+=("$summary")
+while IFS= read -r issue_key; do
+  related_issues+=("$issue_key")
 done <<< "$jira_data"
 
-# ... (rest of the script for printing the array is the same as in Option 1)
+# Remove duplicate entries if any
+related_issues=("${!related_issues[@]}")
+
+# Print the array elements (for verification)
+for i in "${!related_issues[@]}"; do
+  echo "Related Issue ${i}: ${related_issues[$i]}"
+done
+
+# Example of accessing a specific element:
+echo "Parent issue: ${related_issues[0]}"
+
