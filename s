@@ -1,65 +1,38 @@
 #!/bin/bash
 
-# Jira Credentials
-JIRA_URL="https://your-jira-instance.atlassian.net"
-JIRA_USER="your-email@example.com"
-JIRA_API_TOKEN="your-api-token"
+# Function to fetch a custom field from a Jira ticket
+get_custom_field() {
+    local jira_url=$1
+    local jira_user=$2
+    local jira_pass=$3
+    local ticket_id=$4
+    local custom_field=$5
 
-# Define malcodes arrays
-malcodes1=("MAL1A" "MAL1B" "MAL1C")
-malcodes2=("MAL2A" "MAL2B" "MAL2C")
-malcodes3=("MAL3A" "MAL3B" "MAL3C")
-malcodes4=("MAL4A" "MAL4B" "MAL4C")
-malcodes5=("MAL5A" "MAL5B" "MAL5C")
+    # Fetch the JSON response from the Jira API
+    local response=$(curl -s -u "${jira_user}:${jira_pass}" -X GET \
+                     -H "Content-Type: application/json" \
+                     "${jira_url}/${ticket_id}")
 
-# Related Jira issues
-related_issues=("abcddrf-123" "abcdgrp-456" "xyzabcd-789")
+    # Extract the custom field value from the JSON response
+    local custom_field_value=$(echo "$response" | jq -r ".fields.${custom_field}")
 
-# Mapping of 7-letter prefixes to malcode groups
-declare -A malcode_map
-malcode_map["abcddrf"]="malcodes1"
-malcode_map["abcdgrp"]="malcodes2"
-malcode_map["xyzabcd"]="malcodes3"
-
-# Function to create a subtask
-create_subtask() {
-    local parent_issue=$1
-    local malcode=$2
-
-    # JSON payload for subtask creation
-    json_payload=$(jq -n \
-        --arg summary "Subtask for $malcode under $parent_issue" \
-        --arg description "Handling $malcode related to $parent_issue" \
-        --arg parent "$parent_issue" \
-        --arg issueType "Sub-task" \
-        '{fields: {summary: $summary, description: $description, issuetype: {name: $issueType}, parent: {key: $parent}}}'
-    )
-
-    # Create the subtask in Jira
-    response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
-        -X POST \
-        -H "Content-Type: application/json" \
-        --data "$json_payload" \
-        "$JIRA_URL/rest/api/2/issue/")
-
-    echo "Created subtask for $malcode under $parent_issue"
+    # If the custom field is null or empty, return a message
+    if [[ -z "$custom_field_value" || "$custom_field_value" == "null" ]]; then
+        echo "No value found for ${custom_field}."
+    else
+        echo "$custom_field_value"
+    fi
 }
 
-# Iterate through related issues
-for issue in "${related_issues[@]}"; do
-    prefix=${issue:0:7}  # Extract first 7 characters
+# Example usage of the function
+jira_url="https://your.jira.instance/rest/api/2/issue"
+jira_user="your_username"
+jira_pass="your_password"
+ticket_id="YOUR-TICKET-ID"
+custom_field="customfield_24100"
 
-    # Determine corresponding malcode group
-    group_var=${malcode_map[$prefix]}
+# Call the function and capture the output
+custom_field_value=$(get_custom_field "$jira_url" "$jira_user" "$jira_pass" "$ticket_id" "$custom_field")
 
-    if [[ -n "$group_var" ]]; then
-        eval "group_array=(\"\${$group_var[@]}\")"
-
-        # Create a subtask for each malcode under the related Jira issue
-        for malcode in "${group_array[@]}"; do
-            create_subtask "$issue" "$malcode"
-        done
-    else
-        echo "No malcode group found for $issue"
-    fi
-done
+# Print the extracted custom field value
+echo "Custom Field Value (${custom_field}): $custom_field_value"
