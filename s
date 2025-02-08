@@ -1,49 +1,24 @@
 #!/bin/bash
 
-# Function to fetch a Jira ticket summary and split it into an array
-get_summary_words() {
-    local jira_url=$1
-    local jira_user=$2
-    local jira_pass=$3
-    local ticket_id=$4
+# Declare an associative array to link ARE_codes with ARE_names
+declare -A ARE_mapping
 
-    # Fetch the JSON response from the Jira API
-    local response=$(curl -s -u "${jira_user}:${jira_pass}" -X GET \
-                     -H "Content-Type: application/json" \
-                     "${jira_url}/${ticket_id}")
+# Populate the array with ARE_codes as keys and ARE_names as values
+ARE_mapping=(
+    ["ARE001"]="Area Name 1"
+    ["ARE002"]="Area Name 2"
+    ["ARE003"]="Area Name 3"
+    ["ARE004"]="Area Name 4"
+)
 
-    # Extract the summary field from the JSON response
-    local summary=$(echo "$response" | jq -r '.fields.summary')
+# Example usage
+read -p "Enter an ARE code (e.g., ARE001): " input_code
 
-    # Initialize an empty array
-    local -a words=()
-
-    # Split the summary into words and store them in the array
-    for word in $summary; do
-        words+=("$word")
-    done
-
-    # Print each word in the array (optional)
-    echo "Summary Words:"
-    for word in "${words[@]}"; do
-        echo "$word"
-    done
-
-    # Return the array (use declare -p for debugging purposes if needed)
-    declare -p words
-}
-
-# Example usage of the function
-jira_url="https://your.jira.instance/rest/api/2/issue"
-jira_user="your_username"
-jira_pass="your_password"
-ticket_id="YOUR-TICKET-ID"
-
-# Call the function and capture the array output
-eval "$(get_summary_words "$jira_url" "$jira_user" "$jira_pass" "$ticket_id")"
-
-# Example: Access the array
-echo "Accessing words array:"
-for word in "${words[@]}"; do
-    echo "$word"
-done
+# Check if the code exists in the array
+if [[ -n "${ARE_mapping[$input_code]}" ]]; then
+    # Assign the corresponding name to a variable
+    ARE_name="${ARE_mapping[$input_code]}"
+    echo "The name for $input_code is: $ARE_name"
+else
+    echo "Invalid ARE code: $input_code"
+fi
