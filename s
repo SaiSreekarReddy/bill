@@ -5,51 +5,71 @@ JIRA_URL="https://your-jira-instance.atlassian.net"
 JIRA_USER="your-email@example.com"
 JIRA_API_TOKEN="your-api-token"
 
-# Define the array of issues
-issues=("abcddrf-123" "abcdgrp-456" "xyzabcd-789")
+# Define the mapping of prefixes (first 7 characters) to watchers
+declare -A watcher_map
+watcher_map["abcddrf"]="watcher1,watcher2"
+watcher_map["abcdgrp"]="watcher3"
+watcher_map["xyzabcd"]="watcher4,watcher5"
 
-# Define the mapping of prefixes (first 7 characters) to assignees
-declare -A assignee_map
-assignee_map["abcddrf"]="user1"
-assignee_map["abcdgrp"]="user2"
-assignee_map["xyzabcd"]="user3"
+# Function to create a subtask and add watchers
+create_subtask_with_watchers() {
+    local parent_issue=$1
+    local summary=$2
+    local description=$3
+    local watchers=$4
 
-# Function to change the assignee in Jira
-change_assignee() {
-    local issue=$1
-    local assignee=$2
-
-    # JSON payload for updating the assignee
+    # JSON payload for subtask creation
     json_payload=$(jq -n \
-        --arg assignee "$assignee" \
-        '{fields: {assignee: {name: $assignee}}}'
+        --arg summary "$summary" \
+        --arg description "$description" \
+        --arg parent "$parent_issue" \
+        --arg issueType "Sub-task" \
+        '{fields: {summary: $summary, description: $description, issuetype: {name: $issueType}, parent: {key: $parent}}}'
     )
 
-    # Make the API call to update the assignee
+    # Create the subtask in Jira
     response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
-        -X PUT \
+        -X POST \
         -H "Content-Type: application/json" \
         --data "$json_payload" \
-        "$JIRA_URL/rest/api/2/issue/$issue")
+        "$JIRA_URL/rest/api/2/issue/")
 
-    # Check the response
-    if [[ $response == *"error"* ]]; then
-        echo "Failed to update assignee for $issue: $response"
-    else
-        echo "Successfully updated assignee for $issue to $assignee"
+    # Extract the new subtask key
+    subtask_key=$(echo "$response" | jq -r '.key')
+
+    if [[ -z "$subtask_key" || "$subtask_key" == "null" ]]; then
+        echo "Failed to create subtask: $response"
+        return 1
     fi
+
+    echo "Subtask created: $subtask_key"
+
+    # Add watchers to the subtask
+    IFS=',' read -ra watcher_array <<< "$watchers"
+    for watcher in "${watcher_array[@]}"; do
+        watcher_response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+            -X POST \
+            -H "Content-Type: application/json" \
+            --data "\"$watcher\"" \
+            "$JIRA_URL/rest/api/2/issue/$subtask_key/watchers")
+
+        if [[ "$watcher_response" == *"error"* ]]; then
+            echo "Failed to add watcher $watcher to $subtask_key: $watcher_response"
+        else
+            echo "Watcher $watcher added to $subtask_key"
+        fi
+    done
 }
 
-# Iterate through the issues
-for issue in "${issues[@]}"; do
-    prefix=${issue:0:7}  # Extract the first 7 characters
+# Example usage of the function
+parent_issue="PROJECT-123"  # Replace with your parent issue key
+summary="Subtask for Malcode Handling"
+description="Description of the subtask with relevant details."
+prefix="abcddrf"
+watchers=${watcher_map[$prefix]}
 
-    # Determine the assignee based on the prefix
-    assignee=${assignee_map[$prefix]}
-
-    if [[ -n "$assignee" ]]; then
-        change_assignee "$issue" "$assignee"
-    else
-        echo "No assignee mapping found for prefix $prefix in issue $issue"
-    fi
-done
+if [[ -n "$watchers" ]]; then
+    create_subtask_with_watchers "$parent_issue" "$summary" "$description" "$watchers"
+else
+    echo "No watchers defined for prefix $prefix"
+fi
