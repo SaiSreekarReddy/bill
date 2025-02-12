@@ -1,6 +1,6 @@
 #!/bin/bash
 
-# Jira Credentials
+# Jira credentials
 JIRA_URL="https://your-jira-instance.atlassian.net"
 JIRA_USER="your-email@example.com"
 JIRA_API_TOKEN="your-api-token"
@@ -11,12 +11,14 @@ watcher_map["abcddrf"]="watcher1,watcher2"
 watcher_map["abcdgrp"]="watcher3"
 watcher_map["xyzabcd"]="watcher4,watcher5"
 
-# Function to create a subtask and add watchers
-create_subtask_with_watchers() {
-    local parent_issue=$1
-    local summary=$2
-    local description=$3
-    local watchers=$4
+# Function to create a subtask
+create_jira_subtask() {
+    local user=$1
+    local pass=$2
+    local project_key=$3
+    local parent_issue=$4
+    local summary=$5
+    local description=$6
 
     # JSON payload for subtask creation
     json_payload=$(jq -n \
@@ -27,14 +29,14 @@ create_subtask_with_watchers() {
         '{fields: {summary: $summary, description: $description, issuetype: {name: $issueType}, parent: {key: $parent}}}'
     )
 
-    # Create the subtask in Jira
-    response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+    # Create the subtask
+    response=$(curl -s -u "$user:$pass" \
         -X POST \
         -H "Content-Type: application/json" \
         --data "$json_payload" \
         "$JIRA_URL/rest/api/2/issue/")
 
-    # Extract the new subtask key
+    # Extract the subtask key
     subtask_key=$(echo "$response" | jq -r '.key')
 
     if [[ -z "$subtask_key" || "$subtask_key" == "null" ]]; then
@@ -43,33 +45,51 @@ create_subtask_with_watchers() {
     fi
 
     echo "Subtask created: $subtask_key"
+    echo "$subtask_key"
+}
 
-    # Add watchers to the subtask
+# Function to add watchers to a subtask
+add_watchers() {
+    local subtask_key=$1
+    local watchers=$2
+
     IFS=',' read -ra watcher_array <<< "$watchers"
     for watcher in "${watcher_array[@]}"; do
-        watcher_response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
+        response=$(curl -s -u "$JIRA_USER:$JIRA_API_TOKEN" \
             -X POST \
             -H "Content-Type: application/json" \
             --data "\"$watcher\"" \
             "$JIRA_URL/rest/api/2/issue/$subtask_key/watchers")
 
-        if [[ "$watcher_response" == *"error"* ]]; then
-            echo "Failed to add watcher $watcher to $subtask_key: $watcher_response"
+        if [[ "$response" == *"error"* ]]; then
+            echo "Failed to add watcher $watcher to $subtask_key: $response"
         else
             echo "Watcher $watcher added to $subtask_key"
         fi
     done
 }
 
-# Example usage of the function
-parent_issue="PROJECT-123"  # Replace with your parent issue key
-summary="Subtask for Malcode Handling"
-description="Description of the subtask with relevant details."
-prefix="abcddrf"
-watchers=${watcher_map[$prefix]}
+# Main loop
+if [[ -n "$group_var" ]]; then
+    eval "group_array=(\"\${$group_var[@]}\")"  # Expand group array
 
-if [[ -n "$watchers" ]]; then
-    create_subtask_with_watchers "$parent_issue" "$summary" "$description" "$watchers"
+    # Loop through malcodes for the related Jira issue
+    for malcode in "${group_array[@]}"; do
+        # Set the required variables
+        summary="Please upgrade $malcode in $testset to $month"
+        description="This subtask is for upgrading $malcode in $testset during $month."
+        watchers=${watcher_map[$prefix]}  # Get watchers based on prefix
+
+        # Create subtask and get the key
+        subtask_key=$(create_jira_subtask "$user" "$pass" "$project_key" "$issue" "$summary" "$description")
+        
+        if [[ -n "$watchers" && -n "$subtask_key" ]]; then
+            # Add watchers to the created subtask
+            add_watchers "$subtask_key" "$watchers"
+        else
+            echo "No watchers defined or subtask creation failed for $malcode under $issue."
+        fi
+    done
 else
-    echo "No watchers defined for prefix $prefix"
+    echo "No group variable found!"
 fi
