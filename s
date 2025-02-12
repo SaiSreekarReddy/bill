@@ -1,72 +1,33 @@
-# Function to fetch summaries in bulk
-fetch_summaries() {
-  local tickets="$1"
-  local -n malcodes_array=$2  # Pass array by reference
+@echo off
+setlocal enabledelayedexpansion
 
-  if [ -z "$tickets" ]; then
-    return
-  fi
+:: Define the mapping between numbers and plink commands
+:: You can add more numbers and commands as needed
+set "cmd1=plink.exe -ssh -pw password user@server1 -t \"command_to_execute_1\""
+set "cmd2=plink.exe -ssh -pw password user@server2 -t \"command_to_execute_2\""
+set "cmd3=plink.exe -ssh -pw password user@server3 -t \"command_to_execute_3\""
 
-  ticket_list=$(echo "$tickets" | tr '\n' ',' | sed 's/,$//')
+:: Prompt the user for input
+echo Enter the number corresponding to the command you want to run:
+echo [1] Execute command on server1
+echo [2] Execute command on server2
+echo [3] Execute command on server3
+set /p choice=Enter the number: 
 
-  jira_response=$(curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X POST "${JIRA_SEARCH_URL}" \
-                   -H "Content-Type: application/json" \
-                   --data "{\"jql\": \"key in ($ticket_list)\", \"fields\": [\"summary\"]}")
-
-  while IFS= read -r summary; do
-    # Extract the second word (malcode) and third word
-    second_word=$(echo "$summary" | awk '{print $2}')
-    third_word=$(echo "$summary" | awk '{print $3}')
-
-    # Check if the third word matches "db" in any case and append _db
-    if [[ "${third_word,,}" == "db" ]]; then
-      malcode="${second_word}_db"
-    else
-      malcode="$second_word"
-    fi
-
-    malcodes_array+=("$malcode")
-  done < <(echo "$jira_response" | jq -r '.issues[].fields.summary')
-}
-
-
-
-
-
-_____________________
-
-
-
-
-
-
-# Function to fetch summaries in bulk
-fetch_summaries() {
-  local tickets="$1"
-  local -n malcodes_array=$2  # Pass array by reference
-
-  if [ -z "$tickets" ]; then
-    return
-  fi
-
-  ticket_list=$(echo "$tickets" | tr '\n' ',' | sed 's/,$//')
-
-  jira_response=$(curl -s -u "${JIRA_USER}:${JIRA_PASS}" -X POST "${JIRA_SEARCH_URL}" \
-                   -H "Content-Type: application/json" \
-                   --data "{\"jql\": \"key in ($ticket_list)\", \"fields\": [\"summary\"]}")
-
-  while IFS= read -r summary; do
-    # Extract the second word (malcode) and third word
-    second_word=$(echo "$summary" | awk '{print $2}')
-    third_word=$(echo "$summary" | awk '{print $3}')
-
-    # Include the third word if it's "db"
-    if [[ "$third_word" == "db" ]]; then
-      malcode="${second_word}_db"
-    else
-      malcode="$second_word"
-    fi
-
-    malcodes_array+=("$malcode")
-  done < <(echo "$jira_response" | jq -r '.issues[].fields.summary')
-}
+:: Check the input and execute the corresponding command
+if "%choice%"=="1" (
+    echo Running command for server1...
+    %cmd1%
+    goto :eof
+) else if "%choice%"=="2" (
+    echo Running command for server2...
+    %cmd2%
+    goto :eof
+) else if "%choice%"=="3" (
+    echo Running command for server3...
+    %cmd3%
+    goto :eof
+) else (
+    echo There is no number like that.
+    goto :eof
+)
