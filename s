@@ -32,10 +32,10 @@ send_email() {
   local subject="$3"
   local body="$4"
 
-  echo "$body" | mail -s "$subject" -c "$cc" "$to"
+  echo -e "$body" | mail -s "$subject" -c "$cc" "$to"
 }
 
-# Loop through queries
+# Main processing loop for queries
 for i in "${!QUERIES[@]}"; do
   query="${QUERIES[$i]}"
   emails="${EMAIL_CONFIGS[$i]}"
@@ -49,32 +49,22 @@ for i in "${!QUERIES[@]}"; do
     continue # Skip to the next query
   fi
 
-  # Process each ticket
+  # Build the report for all tickets in this query
+  report="Jira Ticket Update Report\n\nThe following tickets have not been updated in the last $SINCE_HOURS hours:\n\n"
   echo "$tickets" | while IFS= read -r ticket; do
     key=$(echo "$ticket" | jq -r '.key')
     summary=$(echo "$ticket" | jq -r '.summary')
     assignee=$(echo "$ticket" | jq -r '.assignee')
     updated=$(echo "$ticket" | jq -r '.updated')
 
-    # Get assignee email if applicable
-    if [[ "$assignee" != "Unassigned" ]]; then
-      assignee_email=$(curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" "$JIRA_URL/rest/api/2/user?username=$assignee" | jq -r '.emailAddress')
-    else
-      assignee_email=""
-    fi
-
-    subject="Jira Ticket Update Reminder: $key - $summary"
-    body="This is a reminder that Jira ticket $key ($summary) is open and has not been updated in the last $SINCE_HOURS hours. Please review and update it.\n\nTicket URL: $JIRA_URL/browse/$key\n\nAssignee: $assignee ($assignee_email)\nUpdated Time: $updated"
-
-    # Send email including the assignee
-    all_recipients="$EMAIL_TO"
-    if [[ -n "$assignee_email" ]]; then
-      all_recipients="$all_recipients,$assignee_email"
-    fi
-
-    send_email "$all_recipients" "$EMAIL_CC" "$subject" "$body"
-    echo "Email sent for ticket: $key (Query: $query)"
+    # Add ticket details to the report
+    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nLast Updated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
   done
+
+  # Send the consolidated email for this query
+  subject="Jira Ticket Update Report: ${SINCE_HOURS}-Hour Reminder"
+  send_email "$EMAIL_TO" "$EMAIL_CC" "$subject" "$report"
+  echo "Consolidated email sent for query: $query"
 done
 
 echo "Script completed."
