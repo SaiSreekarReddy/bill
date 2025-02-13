@@ -8,8 +8,8 @@ SINCE_HOURS=25
 
 # Query and Email Configurations (Add more as needed)
 QUERIES=(
-  "status=Open AND project = \"Project A\" AND updated <= -${SINCE_HOURS}h"  # Query 1
-  "status=Open AND project = \"Project B\" AND component = \"Component X\" AND updated <= -${SINCE_HOURS}h" # Query 2
+  "status=Open AND project = 'Project A' AND updated <= -${SINCE_HOURS}h"  # Query 1
+  "status=Open AND project = 'Project B' AND component = 'Component X' AND updated <= -${SINCE_HOURS}h" # Query 2
 )
 
 EMAIL_CONFIGS=(
@@ -20,7 +20,9 @@ EMAIL_CONFIGS=(
 # Function to get Jira tickets (using curl and jq)
 get_jira_tickets() {
   local query="$1"
-  curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" "$JIRA_URL/rest/api/2/search?jql=\"$query\"&fields=key,summary,assignee,updated" | jq -r '.issues[] | {key:.key, summary:.fields.summary, assignee:.fields.assignee.name, updated:.fields.updated}'
+  curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" \
+    "$JIRA_URL/rest/api/2/search?jql=$(echo "$query" | jq -sRr @uri)&fields=key,summary,assignee,updated" | \
+    jq -c '.issues[] | {key:.key, summary:.fields.summary, assignee:(.fields.assignee | if . == null then "Unassigned" else .name end), updated:.fields.updated}'
 }
 
 # Function to send email notification
@@ -48,28 +50,31 @@ for i in "${!QUERIES[@]}"; do
   fi
 
   # Process each ticket
-  while IFS= read -r ticket; do
+  echo "$tickets" | while IFS= read -r ticket; do
     key=$(echo "$ticket" | jq -r '.key')
     summary=$(echo "$ticket" | jq -r '.summary')
     assignee=$(echo "$ticket" | jq -r '.assignee')
     updated=$(echo "$ticket" | jq -r '.updated')
 
-    assignee_email=$(curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" "$JIRA_URL/rest/api/2/user/$assignee" | jq -r '.emailAddress')
+    # Get assignee email if applicable
+    if [[ "$assignee" != "Unassigned" ]]; then
+      assignee_email=$(curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" "$JIRA_URL/rest/api/2/user?username=$assignee" | jq -r '.emailAddress')
+    else
+      assignee_email=""
+    fi
 
     subject="Jira Ticket Update Reminder: $key - $summary"
     body="This is a reminder that Jira ticket $key ($summary) is open and has not been updated in the last $SINCE_HOURS hours. Please review and update it.\n\nTicket URL: $JIRA_URL/browse/$key\n\nAssignee: $assignee ($assignee_email)\nUpdated Time: $updated"
 
     # Send email including the assignee
-    if [[ ! -z "$assignee_email" ]]; then
-        all_recipients="$EMAIL_TO,$assignee_email" # Include assignee in 'to'
-        send_email "$all_recipients" "$EMAIL_CC" "$subject" "$body"
-        echo "Email sent for ticket: $key (Query: $query)"
-    else
-        echo "Could not retrieve email for assignee: $assignee (Ticket: $key, Query: $query)"
+    all_recipients="$EMAIL_TO"
+    if [[ -n "$assignee_email" ]]; then
+      all_recipients="$all_recipients,$assignee_email"
     fi
 
-  done <<< "$tickets"
+    send_email "$all_recipients" "$EMAIL_CC" "$subject" "$body"
+    echo "Email sent for ticket: $key (Query: $query)"
+  done
 done
 
 echo "Script completed."
-
