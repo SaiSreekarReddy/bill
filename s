@@ -1,31 +1,32 @@
-# Main loop for queries
+# Main processing loop for queries
 for i in "${!QUERIES[@]}"; do
   query="${QUERIES[$i]}"
   emails="${EMAIL_CONFIGS[$i]}"
-  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails"
+  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails" # Split emails
 
   tickets=$(get_jira_tickets "$query")
 
+  # Check if any tickets were found for this query
   if [[ -z "$tickets" ]]; then
     echo "No Jira tickets found for query: $query"
-    continue
+    continue # Skip to the next query
   fi
 
   # Initialize the report
-  report="Jira Ticket Update Report\n\nTickets not updated in the last $SINCE_HOURS hours:\n\n"
+  report="Jira Ticket Update Report\n\nTickets not updated in the last ${SINCE_HOURS} hours:\n\n"
 
-  # Process tickets using a for loop to avoid subshells
-  for ticket in $(echo "$tickets" | jq -c '.'); do
+  # Process tickets while retaining the report variable
+  while IFS= read -r ticket; do
     key=$(echo "$ticket" | jq -r '.key // "No Key"')
     summary=$(echo "$ticket" | jq -r '.summary // "No Summary Available"')
     assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
     updated=$(echo "$ticket" | jq -r '.updated // "No Updated Time Available"')
 
-    # Append to the report
-    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nUpdated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
-  done
+    # Append ticket details to the report
+    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nLast Updated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
+  done < <(echo "$tickets" | jq -c '.issues[]') # Process tickets directly from JSON
 
-  # Echo the report to Jenkins log
+  # Echo the report to the Jenkins log
   echo -e "\n==== Report for Query: $query ====\n"
   echo -e "$report"
 
