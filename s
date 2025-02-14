@@ -1,96 +1,59 @@
-# Main processing loop for queries
-for i in "${!QUERIES[@]}"; do
-  query="${QUERIES[$i]}"
-  emails="${EMAIL_CONFIGS[$i]}"
-  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails" # Split emails
+#!/bin/bash
 
-  tickets=$(get_jira_tickets "$query")
-  echo "Raw tickets JSON: $tickets" # Debugging: Print raw tickets JSON
+# Function to install sendmail
+install_sendmail() {
+  echo "Checking if sendmail is installed..."
 
-  # Check if any tickets were found for this query
-  if [[ -z "$tickets" || "$tickets" == "null" ]]; then
-    echo "No tickets found for query: $query"
-    continue
+  # Check if sendmail is already installed
+  if ! command -v sendmail &>/dev/null; then
+    echo "sendmail is not installed. Installing now..."
+
+    # Detect OS and install sendmail
+    if [ -f /etc/debian_version ]; then
+      # Debian/Ubuntu
+      sudo apt update && sudo apt install -y sendmail
+    elif [ -f /etc/redhat-release ]; then
+      # CentOS/RHEL
+      sudo yum install -y sendmail
+    else
+      echo "Unsupported OS. Please install sendmail manually."
+      exit 1
+    fi
+
+    echo "sendmail installation complete."
+  else
+    echo "sendmail is already installed."
   fi
+}
 
-  # Initialize the report
-  report="Jira Ticket Update Report\n\nTickets not updated in the last ${SINCE_HOURS} hours:\n\n"
-
-  # Process NDJSON tickets while retaining the report variable
-  echo "$tickets" | while IFS= read -r ticket; do
-    key=$(echo "$ticket" | jq -r '.key // "No Key"')
-    summary=$(echo "$ticket" | jq -r '.summary // "No Summary Available"')
-    assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
-    updated=$(echo "$ticket" | jq -r '.updated // "No Updated Time Available"')
-
-    # Append ticket details to the report
-    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nLast Updated: $updated\n\n"
-  done
-
-  # Echo the report to Jenkins log
-  echo -e "\n==== Report for Query: $query ====\n"
-  echo -e "$report"
-
-  # Send the email
-  subject="Jira Ticket Update Report: ${SINCE_HOURS}-Hour Reminder"
-  send_email "$EMAIL_TO" "$EMAIL_CC" "$subject" "$report"
-  echo "Consolidated email sent for query: $query"
-done
-
-echo "Script completed."
-
----------------------------------------------------------------------------
-
-
-
-# Main processing loop for queries
-for i in "${!QUERIES[@]}"; do
-  query="${QUERIES[$i]}"
-  emails="${EMAIL_CONFIGS[$i]}"
-  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails" # Split emails
-
-  tickets=$(get_jira_tickets "$query")
-  echo "Raw tickets JSON: $tickets" # Debugging: Print raw tickets JSON
-
-  # Check if any tickets were found for this query
-  if [[ -z "$tickets" || "$tickets" == "null" ]]; then
-    echo "No tickets found for query: $query"
-    continue
+# Function to start sendmail service
+start_sendmail() {
+  echo "Starting sendmail service..."
+  if command -v systemctl &>/dev/null; then
+    # For systemd systems
+    sudo systemctl start sendmail
+    sudo systemctl enable sendmail
+  else
+    # For systems without systemd (e.g., SysVinit)
+    sudo service sendmail start
+    sudo chkconfig sendmail on
   fi
+  echo "sendmail service started."
+}
 
-  # Initialize the report
-  report="Jira Ticket Update Report\n\nTickets not updated in the last ${SINCE_HOURS} hours:\n\n"
+# Function to send a test email
+send_test_email() {
+  local recipient=$1
+  echo "Sending test email to $recipient..."
+  echo "Subject: Test Email" | sendmail "$recipient"
+  echo "Test email sent to $recipient."
+}
 
-  # Process tickets using a while loop and process substitution
-  while IFS= read -r ticket; do
-    # Extract fields from each ticket
-    key=$(echo "$ticket" | jq -r '.key // "No Key"')
-    summary=$(echo "$ticket" | jq -r '.summary // "No Summary Available"')
-    assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
-    updated=$(echo "$ticket" | jq -r '.updated // "No Updated Time Available"')
+# Install sendmail if necessary
+install_sendmail
 
-    # Append ticket details to the report
-    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nLast Updated: $updated\n\n"
+# Start the sendmail service
+start_sendmail
 
-    # Debug: Print ticket details
-    echo "Processed ticket: $key, Summary: $summary, Assignee: $assignee, Updated: $updated"
-  done < <(echo "$tickets") # Use process substitution to feed JSON lines into the while loop
-
-  # Echo the report to Jenkins log
-  echo -e "\n==== Report for Query: $query ====\n"
-  echo -e "$report"
-
-  # Send the email
-  subject="Jira Ticket Update Report: ${SINCE_HOURS}-Hour Reminder"
-  send_email "$EMAIL_TO" "$EMAIL_CC" "$subject" "$report"
-  echo "Consolidated email sent for query: $query"
-done
-
-echo "Script completed."
-
-
-
-
-
-
-
+# Optional: Send a test email
+send_test_email "your-email@example.com"
