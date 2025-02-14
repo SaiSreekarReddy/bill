@@ -6,18 +6,18 @@ JIRA_USERNAME="YOUR_JIRA_USERNAME"
 JIRA_PASSWORD="YOUR_JIRA_PASSWORD" # Or API token
 SINCE_HOURS=25
 
-# Query and Email Configurations (Add more as needed)
+# Query and Email Configurations
 QUERIES=(
-  "status=Open AND project = 'Project A' AND updated <= -${SINCE_HOURS}h"  # Query 1
-  "status=Open AND project = 'Project B' AND component = 'Component X' AND updated <= -${SINCE_HOURS}h" # Query 2
+  "status=Open AND project = 'Project A' AND updated <= -${SINCE_HOURS}h"
+  "status=Open AND project = 'Project B' AND component = 'Component X' AND updated <= -${SINCE_HOURS}h"
 )
 
 EMAIL_CONFIGS=(
-  "email1@example.com,cc1@example.com,cc2@example.com"  # Emails for Query 1
-  "email2@example.com,cc3@example.com"  # Emails for Query 2
+  "email1@example.com,cc1@example.com,cc2@example.com"
+  "email2@example.com,cc3@example.com"
 )
 
-# Function to get Jira tickets (using curl and jq)
+# Function to get Jira tickets
 get_jira_tickets() {
   local query="$1"
   curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" \
@@ -25,7 +25,7 @@ get_jira_tickets() {
     jq -c '.issues[] | {key:.key, summary:.fields.summary, assignee:(.fields.assignee | if . == null then "Unassigned" else .name end), updated:.fields.updated}'
 }
 
-# Function to send email notification
+# Function to send email
 send_email() {
   local to="$1"
   local cc="$2"
@@ -35,33 +35,32 @@ send_email() {
   echo -e "$body" | mail -s "$subject" -c "$cc" "$to"
 }
 
-# Main processing loop for queries
+# Main loop for queries
 for i in "${!QUERIES[@]}"; do
   query="${QUERIES[$i]}"
   emails="${EMAIL_CONFIGS[$i]}"
-  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails" # Split emails
+  IFS=',' read -r EMAIL_TO EMAIL_CC <<< "$emails"
 
   tickets=$(get_jira_tickets "$query")
 
-  # Check if any tickets were found for this query
   if [[ -z "$tickets" ]]; then
     echo "No Jira tickets found for query: $query"
-    continue # Skip to the next query
+    continue
   fi
 
-  # Build the report for all tickets in this query
-  report="Jira Ticket Update Report\n\nThe following tickets have not been updated in the last $SINCE_HOURS hours:\n\n"
-  echo "$tickets" | while IFS= read -r ticket; do
-    key=$(echo "$ticket" | jq -r '.key')
-    summary=$(echo "$ticket" | jq -r '.summary')
-    assignee=$(echo "$ticket" | jq -r '.assignee')
-    updated=$(echo "$ticket" | jq -r '.updated')
+  # Build the report
+  report="Jira Ticket Update Report\n\nTickets not updated in the last $SINCE_HOURS hours:\n\n"
 
-    # Add ticket details to the report
-    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nLast Updated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
+  # Use a for loop instead of a while loop
+  for ticket in $(echo "$tickets" | jq -c '.'); do
+    key=$(echo "$ticket" | jq -r '.key')
+    summary=$(echo "$ticket" | jq -r '.summary // "No summary available"')
+    assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
+    updated=$(echo "$ticket" | jq -r '.updated // "No updated time available"')
+
+    report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nUpdated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
   done
 
-  # Send the consolidated email for this query
   subject="Jira Ticket Update Report: ${SINCE_HOURS}-Hour Reminder"
   send_email "$EMAIL_TO" "$EMAIL_CC" "$subject" "$report"
   echo "Consolidated email sent for query: $query"
