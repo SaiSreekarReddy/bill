@@ -21,8 +21,7 @@ EMAIL_CONFIGS=(
 get_jira_tickets() {
   local query="$1"
   curl -s -u "$JIRA_USERNAME:$JIRA_PASSWORD" \
-    "$JIRA_URL/rest/api/2/search?jql=$(echo "$query" | jq -sRr @uri)&fields=key,summary,assignee,updated" | \
-    jq -c '.issues[] | {key:.key, summary:.fields.summary, assignee:(.fields.assignee | if . == null then "Unassigned" else .name end), updated:.fields.updated}'
+    "$JIRA_URL/rest/api/2/search?jql=$(echo "$query" | jq -sRr @uri)&fields=key,summary,assignee,updated" | jq -c '.issues[]'
 }
 
 # Function to send email
@@ -51,13 +50,22 @@ for i in "${!QUERIES[@]}"; do
   # Build the report
   report="Jira Ticket Update Report\n\nTickets not updated in the last $SINCE_HOURS hours:\n\n"
 
-  # Use a for loop instead of a while loop
-  for ticket in $(echo "$tickets" | jq -c '.'); do
-    key=$(echo "$ticket" | jq -r '.key')
-    summary=$(echo "$ticket" | jq -r '.summary // "No summary available"')
-    assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
-    updated=$(echo "$ticket" | jq -r '.updated // "No updated time available"')
+  echo "Tickets JSON: $tickets" # Debug: Show raw JSON for tickets
 
+  # Use a for loop to process tickets
+  for ticket in $(echo "$tickets" | jq -c '.'); do
+    echo "Processing ticket: $ticket" # Debug: Show raw ticket data
+
+    # Extract fields from ticket
+    key=$(echo "$ticket" | jq -r '.key // "No Key"')
+    summary=$(echo "$ticket" | jq -r '.summary // "No Summary Available"')
+    assignee=$(echo "$ticket" | jq -r '.assignee // "Unassigned"')
+    updated=$(echo "$ticket" | jq -r '.updated // "No Updated Time Available"')
+
+    # Debug: Print extracted values
+    echo "Key: $key, Summary: $summary, Assignee: $assignee, Updated: $updated"
+
+    # Add to report
     report+="Ticket: $key\nSummary: $summary\nAssignee: $assignee\nUpdated: $updated\nTicket URL: $JIRA_URL/browse/$key\n\n"
   done
 
