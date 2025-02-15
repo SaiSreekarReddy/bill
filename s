@@ -1,23 +1,14 @@
-sendmail -v
-send_email_ext() {
-    local to="$1"
-    local cc="$2"
-    local subject="$3"
-    local body="$4"
-    local attachments="$5" # Optional for attachments
 
-    # Construct the email-ext command
-    local command="emailext \
-        --to \"$to\" \
-        --cc \"$cc\" \
-        --subject \"$subject\" \
-        --body \"$body\""
+    # Set the Jenkins server details
+    local jenkins_url="http://<jenkins-server>/job/<your-job-name>/buildWithParameters"
+    local jenkins_user="<jenkins-username>"
+    local jenkins_token="<jenkins-api-token>"
 
-    # Add attachments if provided
-    if [ -n "$attachments" ]; then
-        command="$command --attachment \"$attachments\""
-    fi
-
-    # Execute the email-ext command
-    eval $command
-}
+    # Trigger the email-ext plugin
+    curl -X POST "$jenkins_url" \
+        --user "$jenkins_user:$jenkins_token" \
+        --data-urlencode "recipients=$to" \
+        --data-urlencode "cc=$cc" \
+        --data-urlencode "subject=$subject" \
+        --data-urlencode "body=$body" \
+        --form "file0=@$attachment"
