@@ -1,14 +1,25 @@
+@echo off
+setlocal
 
-    # Set the Jenkins server details
-    local jenkins_url="http://<jenkins-server>/job/<your-job-name>/buildWithParameters"
-    local jenkins_user="<jenkins-username>"
-    local jenkins_token="<jenkins-api-token>"
+:: Call the VBScript to select a file and get the file path
+echo Set objDialog = CreateObject("UserAccounts.CommonDialog") > "%temp%\SelectFile.vbs"
+echo objDialog.Filter = "All Files|*.*" >> "%temp%\SelectFile.vbs"
+echo objDialog.InitialDir = "C:\" >> "%temp%\SelectFile.vbs"
+echo objDialog.Flags = &H80000 >> "%temp%\SelectFile.vbs"
+echo If objDialog.ShowOpen Then WScript.Echo objDialog.FileName >> "%temp%\SelectFile.vbs"
 
-    # Trigger the email-ext plugin
-    curl -X POST "$jenkins_url" \
-        --user "$jenkins_user:$jenkins_token" \
-        --data-urlencode "recipients=$to" \
-        --data-urlencode "cc=$cc" \
-        --data-urlencode "subject=$subject" \
-        --data-urlencode "body=$body" \
-        --form "file0=@$attachment"
+:: Run VBScript and capture the selected file path
+for /f "delims=" %%I in ('cscript //nologo "%temp%\SelectFile.vbs"') do set "FILE_PATH=%%I"
+
+:: Delete the temporary VBScript file
+del "%temp%\SelectFile.vbs"
+
+:: Extract file name from the full path
+for %%I in ("%FILE_PATH%") do set "FILE_NAME=%%~nxI"
+
+:: Print results
+echo Full Path: %FILE_PATH%
+echo File Name: %FILE_NAME%
+
+endlocal
+pause
