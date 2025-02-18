@@ -1,25 +1,43 @@
 @echo off
+
 setlocal
 
-:: Call the VBScript to select a file and get the file path
-echo Set objDialog = CreateObject("UserAccounts.CommonDialog") > "%temp%\SelectFile.vbs"
-echo objDialog.Filter = "All Files|*.*" >> "%temp%\SelectFile.vbs"
-echo objDialog.InitialDir = "C:\" >> "%temp%\SelectFile.vbs"
-echo objDialog.Flags = &H80000 >> "%temp%\SelectFile.vbs"
-echo If objDialog.ShowOpen Then WScript.Echo objDialog.FileName >> "%temp%\SelectFile.vbs"
+:ChooseFile
+echo Please select a file:
 
-:: Run VBScript and capture the selected file path
-for /f "delims=" %%I in ('cscript //nologo "%temp%\SelectFile.vbs"') do set "FILE_PATH=%%I"
+for /f "delims=" %%a in ('powershell -Command "[System.Windows.Forms.OpenFileDialog]::new().ShowDialog() | Out-String" ') do (
+  set "filePath=%%a"
+)
 
-:: Delete the temporary VBScript file
-del "%temp%\SelectFile.vbs"
+if not defined filePath (
+  echo No file selected.  Exiting.
+  pause
+  exit /b 1
+)
 
-:: Extract file name from the full path
-for %%I in ("%FILE_PATH%") do set "FILE_NAME=%%~nxI"
+echo File Path: "%filePath%"
 
-:: Print results
-echo Full Path: %FILE_PATH%
-echo File Name: %FILE_NAME%
+REM Extract file name
+for /f "delims=\" %%a in ("%filePath%") do (
+  set "fileName=%%a"
+)
+
+echo File Name: "%fileName%"
+
+
+REM Extract path without filename.  More robust method:
+for /f "delims=" %%a in ("%filePath%") do (
+  set "fullPath=%%~dpf a"  REM %%~dpf expands to drive and path
+)
+
+echo Full Path (without filename): "%fullPath%"
+
+REM  Alternative method if you're SURE there's a drive letter:
+REM set "pathOnly=%filePath:~0,-%fileName:~0%"
+REM echo Path Only (alternative): "%pathOnly%"
+
+echo.
+echo Done!
 
 endlocal
 pause
