@@ -1,43 +1,13 @@
-@echo off
+#!/bin/bash
 
-setlocal
+MULTI_STRING_PARAM="$MULTI_STRING_PARAM"  # Important: ensure the parameter is available in the shell script
 
-:ChooseFile
-echo Please select a file:
-
-for /f "delims=" %%a in ('powershell -Command "[System.Windows.Forms.OpenFileDialog]::new().ShowDialog() | Out-String" ') do (
-  set "filePath=%%a"
-)
-
-if not defined filePath (
-  echo No file selected.  Exiting.
-  pause
-  exit /b 1
-)
-
-echo File Path: "%filePath%"
-
-REM Extract file name
-for /f "delims=\" %%a in ("%filePath%") do (
-  set "fileName=%%a"
-)
-
-echo File Name: "%fileName%"
-
-
-REM Extract path without filename.  More robust method:
-for /f "delims=" %%a in ("%filePath%") do (
-  set "fullPath=%%~dpf a"  REM %%~dpf expands to drive and path
-)
-
-echo Full Path (without filename): "%fullPath%"
-
-REM  Alternative method if you're SURE there's a drive letter:
-REM set "pathOnly=%filePath:~0,-%fileName:~0%"
-REM echo Path Only (alternative): "%pathOnly%"
-
-echo.
-echo Done!
-
-endlocal
-pause
+while IFS= read -r line; do
+  [[ "$line" =~ ^#.*$ || -z "$line" ]] && continue  # Ignore comments and empty lines
+  echo "Processing: $line"
+  # Example: Split and process key-value pairs
+  if [[ "$line" != "" ]]; then
+      IFS='=' read -r key value <<< "$line"
+      echo "Key: $key, Value: $value"
+  fi
+done <<< "$MULTI_STRING_PARAM"
