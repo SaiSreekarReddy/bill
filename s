@@ -1,19 +1,15 @@
-def build = Thread.currentThread().executable
-def workspace = build.getEnvironment(TaskListener.NULL).get('WORKSPACE')
-def file = new File(workspace + '/var.properties')
+cat > "${WORKSPACE}/email_body.html" << EOF
+<html>
+  <body>
+    <p>Month: ${month}</p>
+    <p>COF: ${malcodes1[@]}</p>
+    <p>BCR: ${malcodes2[@]}</p>
+    <p>CRD: ${malcodes3[@]}</p>
+    <p>SCC: ${malcodes4[@]}</p>
+    <p>UCC: ${malcodes5[@]}</p>
+  </body>
+</html>
+EOF
 
-if(file.exists()) {
-    file.readLines().each { line ->
-        if(line.contains('=')) {
-            def parts = line.split('=')
-            if(parts.size() == 2) {
-                def key = parts[0].trim()
-                def value = parts[1].trim()
-                build.addAction(new hudson.model.ParametersAction(new hudson.model.StringParameterValue(key, value)))
-                println("Injected variable ${key}=${value}")
-            }
-        }
-    }
-} else {
-    println("File not found at: ${file.absolutePath}")
-}
+
+${FILE,path="email_body.html"}
