@@ -1,4 +1,8 @@
-def file = new File(manager.build.workspace.remote, 'var.properties')
+import hudson.model.*
+def build = Thread.currentThread().executable
+def workspace = build.workspace.toString()
+def file = new File(workspace, 'var.properties')
+
 if(file.exists()) {
     file.readLines().each { line ->
         if(line.contains('=')) {
@@ -6,11 +10,11 @@ if(file.exists()) {
             if(parts.length == 2) {
                 def key = parts[0].trim()
                 def value = parts[1].trim()
-                manager.envVars[key] = value
-                manager.listener.logger.println("Injected variable ${key}=${value}")
+                build.addAction(new ParametersAction(new StringParameterValue(key, value)))
+                println("Injected variable ${key}=${value}")
             }
         }
     }
 } else {
-    manager.listener.logger.println("var.properties file not found at ${file.absolutePath}")
+    println("File not found: ${file.absolutePath}")
 }
