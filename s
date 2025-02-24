@@ -1,15 +1,8 @@
-cat > "${WORKSPACE}/email_body.html" << EOF
-<html>
-  <body>
-    <p>Month: ${month}</p>
-    <p>COF: ${malcodes1[@]}</p>
-    <p>BCR: ${malcodes2[@]}</p>
-    <p>CRD: ${malcodes3[@]}</p>
-    <p>SCC: ${malcodes4[@]}</p>
-    <p>UCC: ${malcodes5[@]}</p>
-  </body>
-</html>
-EOF
+colors=("Red Blue Green")
 
-
-${FILE,path="email_body.html"}
+# Create HTML email content
+echo "<html><body><p>" > "${WORKSPACE}/email_body.html"
+for word in ${colors[@]}; do
+  echo "$word<br>" >> "${WORKSPACE}/email_body.html"
+done
+echo "</p></body></html>" >> "${WORKSPACE}/email_body.html"
