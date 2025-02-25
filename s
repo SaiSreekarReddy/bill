@@ -20,29 +20,31 @@ extract_jira_tickets() {
     echo "${jira_tickets[@]}"  # Return space-separated ticket numbers
 }
 
-# Function to extract the 4th word, month name, and custom fields from a Jira ticket
+# Function to extract Jira details (summary, 4th word, month, custom fields)
 extract_jira_details() {
     local ticket="$1"
     
-    # Get Jira issue details
+    # Fetch Jira issue details
     local issue_details=$(curl -s -u "user:password" -X GET \
         -H "Content-Type: application/json" \
         "https://jira.company.com/rest/api/2/issue/${ticket}")
 
-    # Extract the summary
-    local summary=$(echo "$issue_details" | jq -r '.fields.summary')
+    # Extract summary
+    local summary=$(echo "$issue_details" | jq -r '.fields.summary // "No Summary Found"')
 
-    # Extract the 4th word (if exists)
+    # Extract the 4th word (if available)
     local fourth_word=$(echo "$summary" | awk '{print $4}')
+    fourth_word=${fourth_word:-"NoWord"}  # Default if not found
 
-    # Extract the month name (if exists)
+    # Extract the first found month name (case-insensitive)
     local month_name=$(echo "$summary" | grep -o -i -E 'January|February|March|April|May|June|July|August|September|October|November|December' | head -n 1)
+    month_name=${month_name:-"NoMonth"}  # Default if not found
 
-    # Extract custom fields (Ensure fields exist in Jira)
-    local customfield_24801=$(echo "$issue_details" | jq -r '.fields.customfield_24801 // "Not Set"')
-    local customfield_24802=$(echo "$issue_details" | jq -r '.fields.customfield_24802 // "Not Set"')
+    # Extract custom fields (ensure they exist)
+    local customfield_24801=$(echo "$issue_details" | jq -r '.fields.customfield_24801 // "NotSet"')
+    local customfield_24802=$(echo "$issue_details" | jq -r '.fields.customfield_24802 // "NotSet"')
 
-    # Return values as space-separated output
+    # Print values as space-separated output
     echo "$fourth_word $month_name $customfield_24801 $customfield_24802"
 }
 
@@ -57,13 +59,21 @@ for ticket in $jira_tickets; do
     echo "Processing Jira Ticket: $ticket"
 
     # Get details from Jira
-    read fourth_word month_name customfield_24801 customfield_24802 <<< $(extract_jira_details "$ticket")
+    jira_details=$(extract_jira_details "$ticket")
+    
+    # Read extracted details into separate variables
+    read fourth_word month_name customfield_24801 customfield_24802 <<< "$jira_details"
+
+    echo "  Extracted 4th Word: $fourth_word"
+    echo "  Extracted Month: $month_name"
+    echo "  Custom Field 24801: $customfield_24801"
+    echo "  Custom Field 24802: $customfield_24802"
 
     # Loop through each malcode
     for malcode in "${malcodes_array[@]}"; do
         echo "  Creating subtask for Malcode: $malcode"
 
-        # Construct the subtask summary using extracted words and custom fields
+        # Construct the subtask summary
         subtask_summary="Subtask: $fourth_word $month_name - $malcode (CF1: $customfield_24801, CF2: $customfield_24802)"
 
         # Create Jira subtask using API
