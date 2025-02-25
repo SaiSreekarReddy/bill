@@ -1,22 +1,30 @@
-# Define arrays
-color1=("Red" "Blue" "Green")
-color2=("Yellow" "Orange" "Purple")
+extract_jira_tickets() {
+    local input="$1"
+    local jira_tickets=()
 
-# Create email HTML file
-echo "<html><body>" > "${WORKSPACE}/email_body.html"
+    while IFS= read -r line; do
+        if [[ "$line" =~ https?://.*/browse/([A-Z]+-[0-9]+) ]]; then
+            jira_tickets+=("${BASH_REMATCH[1]}")  # Extract ticket from URL
+        elif [[ "$line" =~ ^[A-Z]+-[0-9]+$ ]]; then
+            jira_tickets+=("$line")  # Use as-is if it's already a ticket number
+        fi
+    done <<< "$input"
 
-# Add Color1 section
-echo "<h3>Members of Color1:</h3><ul>" >> "${WORKSPACE}/email_body.html"
-for word in "${color1[@]}"; do
-  echo "<li>$word</li>" >> "${WORKSPACE}/email_body.html"
-done
-echo "</ul>" >> "${WORKSPACE}/email_body.html"
+    echo "${jira_tickets[@]}"  # Print space-separated ticket numbers
+}
 
-# Add Color2 section
-echo "<h3>Members of Color2:</h3><ul>" >> "${WORKSPACE}/email_body.html"
-for word in "${color2[@]}"; do
-  echo "<li>$word</li>" >> "${WORKSPACE}/email_body.html"
-done
-echo "</ul>" >> "${WORKSPACE}/email_body.html"
 
-echo "</body></html>" >> "${WORKSPACE}/email_body.html"
+# Example multi-line parameter from Jenkins
+JIRA_INPUT=$(cat <<EOF
+https://jira.company.com/browse/ABC-123
+DEF-456
+https://jira.company.com/browse/GHI-789
+JKL-101
+EOF
+)
+
+# Call the function
+jira_tickets=$(extract_jira_tickets "$JIRA_INPUT")
+
+# Print extracted Jira ticket numbers
+echo "Extracted Jira Tickets: $jira_tickets"
